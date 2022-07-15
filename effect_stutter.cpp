@@ -12,13 +12,15 @@ void AudioEffectStutter::update(void)
     
     switch (state)
     {
-        case 0:            
+        case 0:
+            // Passthrough mode
             transmit(blocka);
             release(blocka);
             
             break;
             
         case 1:
+            // Snap mode: Move active block to queue and pass audio through
             if (queue[position]) { release(queue[position]); }
             
             queue[position] = blocka;
@@ -30,6 +32,7 @@ void AudioEffectStutter::update(void)
             break;
             
         case 2:
+            // Latch mode: loop recorded blocks
             release(blocka);
             
             i = (head + offset) % (STUTTER_QUEUE_SIZE - 1);
@@ -56,11 +59,14 @@ void AudioEffectStutter::snap() {
     state = 1;
 }
 
-void AudioEffectStutter::latch() {
-    if (!state) { return; }
+bool AudioEffectStutter::latch() {
+    if (!state) { return false; }
+    if (position == offset) { return false; }
     
     head = 0;
     state = 2;
+    
+    return true;
 }
 
 void AudioEffectStutter::unlatch() {
