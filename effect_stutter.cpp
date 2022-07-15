@@ -4,11 +4,11 @@
 void AudioEffectStutter::update(void)
 {
 #if defined(__ARM_ARCH_7EM__)
-	audio_block_t *blocka;
+    audio_block_t *blocka;
     int i;
     
-	blocka = receiveReadOnly(0);
-	if (!blocka) { return; }
+    blocka = receiveReadOnly(0);
+    if (!blocka) { return; }
     
     switch (state)
     {
@@ -44,10 +44,10 @@ void AudioEffectStutter::update(void)
             break;
     }
 #elif defined(KINETISL)
-	audio_block_t *block;
+    audio_block_t *block;
 
-	block = receiveReadOnly(0);
-	if (block) release(block);
+    block = receiveReadOnly(0);
+    if (block) release(block);
 #endif
 }
 
