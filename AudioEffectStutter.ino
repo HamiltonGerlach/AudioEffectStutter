@@ -36,7 +36,7 @@ unsigned long ClippingTimer = 0;
 
 int PedalMode = 0; // 0 ... EQ, 1 ... Stutter
 
-Bounce btn = Bounce(14, 40);
+Bounce btn = Bounce(14, 50);
 
 bool State = true;
 int Level = 16;
@@ -57,7 +57,7 @@ void setup()
     pinMode(15, INPUT);
     pinMode(16, INPUT);
     pinMode(17, INPUT);
-    pinMode(18, INPUT);
+    pinMode(22, INPUT);
     
     delay(2000);
     if (digitalRead(14) == LOW) { PedalMode = 1; }
@@ -103,10 +103,24 @@ void loop() {
     int pot2conv = round(pot2 / 32 - 15.5);
     int pot3 = analogRead(17);
     int pot3conv = round(pot3 / 32 - 15.5);
-    int pot4 = analogRead(18);
+    int pot4 = analogRead(22);
     int pot4conv = round(pot4 / 32 - 15.5);
-
-
+    
+    
+    if (rms1.available())
+    {
+        
+        Serial.print("Pot 1: ");
+        Serial.print(pot1conv);
+        Serial.print(", Pot 2: ");
+        Serial.print(pot2conv);
+        Serial.print(", Pot 3: ");
+        Serial.print(pot3conv);
+        Serial.print(", Pot 4: ");
+        Serial.print(pot4conv);
+        Serial.println(" ");
+    }
+    
     btn.update();
 
     
@@ -154,8 +168,8 @@ void loop() {
         
         
         if (millis() - last > 50) {
-            biquad1.setPeaking(0, 6000 - pot1conv * 350, -pot3conv, 2);
-            biquad1.setPeaking(1, 4000 - pot2conv * 150, -pot4conv, 6);
+            biquad1.setPeaking(0, 6000 - pot1conv * 350, -pot3conv * 2, 2);
+            biquad1.setPeaking(1, 4000 - pot2conv * 150, -pot4conv * 2, 6);
             last = millis();
         }
     }
