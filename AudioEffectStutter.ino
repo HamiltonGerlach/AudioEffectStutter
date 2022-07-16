@@ -6,29 +6,29 @@
 #include <Bounce.h>
 #include "effect_stutter.h"
 
-AudioInputI2S                        audioInput;         //xy=471,791
-AudioAnalyzePeak                 peak_L;                 //xy=803,448
-AudioAnalyzePeak                 peak_R;                 //xy=818,503
-AudioAnalyzeRMS                    rms1;                     //xy=847,552
-AudioFilterBiquad                biquad1;                //xy=886,745
-AudioAnalyzePeak                 peak1;                    //xy=1018,896
-AudioAmplifier                     amp1;                     //xy=1040,831
-AudioMixer4                            mixer1;                 //xy=1069,668
-AudioOutputI2S                     audioOutput;        //xy=1305,745
-AudioEffectStutter             stutter;
-AudioConnection                    patchCord1(audioInput, 0, peak_L, 0);
-AudioConnection                    patchCord2(audioInput, 0, rms1, 0);
-//AudioConnection                    patchCord3(audioInput, 0, biquad1, 0);
-AudioConnection                    patchCord3(audioInput, 0, stutter, 0);
-AudioConnection                    patchCord4(audioInput, 0, mixer1, 0);
-AudioConnection                    patchCord5(audioInput, 1, peak_R, 0);
-AudioConnection                    patchCord6(audioInput, 1, audioOutput, 1);
-//AudioConnection                    patchCord7(biquad1, amp1);
-AudioConnection                    patchCord7(stutter, audioOutput);
-AudioConnection                    patchCord8(amp1, peak1);
-AudioConnection                    patchCord9(amp1, 0, mixer1, 1);
-AudioConnection                    patchCord10(mixer1, 0, audioOutput, 0);
-AudioControlSGTL5000         sgtl5000_1;         //xy=620,538
+AudioInputI2S                       audioInput;         //xy=471,791
+AudioAnalyzePeak                    peak_L;                 //xy=803,448
+AudioAnalyzePeak                    peak_R;                 //xy=818,503
+AudioAnalyzeRMS                     rms1;                     //xy=847,552
+AudioFilterBiquad                   biquad1;                //xy=886,745
+AudioAnalyzePeak                    peak1;                    //xy=1018,896
+AudioAmplifier                      amp1;                     //xy=1040,831
+AudioMixer4                         mixer1;                 //xy=1069,668
+AudioOutputI2S                      audioOutput;        //xy=1305,745
+AudioEffectStutter                  stutter;
+AudioConnection                     patchCord1(audioInput, 0, peak_L, 0);
+AudioConnection                     patchCord2(audioInput, 0, rms1, 0);
+AudioConnection                     patchCord3(audioInput, 0, biquad1, 0);
+AudioConnection                     patchCord3a(audioInput, 0, stutter, 0);
+AudioConnection                     patchCord4(audioInput, 0, mixer1, 0);
+AudioConnection                     patchCord5(audioInput, 1, peak_R, 0);
+AudioConnection                     patchCord6(audioInput, 1, audioOutput, 1);
+AudioConnection                     patchCord7(biquad1, amp1);
+AudioConnection                     patchCord8(amp1, peak1);
+AudioConnection                     patchCord9(amp1, 0, mixer1, 1);
+AudioConnection                     patchCord10(stutter, 0, mixer1, 2);
+AudioConnection                     patchCord11(mixer1, 0, audioOutput, 0);
+AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 
 
 bool IsClipping = false;
@@ -42,10 +42,8 @@ bool State = true;
 int Level = 16;
 float Gain = 1.0;
 
-void setup() {
-
-    // Audio connections require memory to work.    For more
-    // detailed information, see the MemoryAndCpuUsage example
+void setup()
+{
     AudioMemory(14340);
     sgtl5000_1.enable();
     sgtl5000_1.inputSelect(AUDIO_INPUT_LINEIN);
@@ -55,18 +53,30 @@ void setup() {
     sgtl5000_1.lineOutLevel(Level);
     Serial.begin(9600);
     
-    biquad1.setPeaking(0, 1000, 0.4);
-    
     pinMode(14, INPUT_PULLUP);
     pinMode(15, INPUT);
     pinMode(16, INPUT);
     pinMode(17, INPUT);
     pinMode(18, INPUT);
-
+    
+    delay(2000);
+    if (digitalRead(14) == LOW) { PedalMode = 1; }
+    Serial.println(PedalMode);
     
     amp1.gain(Gain);
-    mixer1.gain(0, 0.0f);
-    mixer1.gain(1, 1.0f);
+    
+    if (PedalMode == 0)
+    {
+        mixer1.gain(0, 0.0f);
+        mixer1.gain(1, 1.0f);
+        mixer1.gain(2, 0.0f);
+    }
+    else
+    {
+        mixer1.gain(0, 0.0f);
+        mixer1.gain(1, 0.0f);
+        mixer1.gain(2, 1.0f);
+    }
 }
 
 int last = 0;
@@ -87,23 +97,6 @@ void loop() {
     }
     
     
-    // if (rms1.available()) {
-    //     Serial.print("all=");
-    //     Serial.print(AudioProcessorUsage());
-    //     Serial.print(",");
-    //     Serial.print(AudioProcessorUsageMax());
-    //     Serial.println("        ");
-    //     Serial.print("Memory: ");
-    //     Serial.print(AudioMemoryUsage());
-    //     Serial.print(",");
-    //     Serial.println(AudioMemoryUsageMax());
-    // }
-
-
-    //Serial.print("Button: ");
-    //Serial.println(!digitalRead(14));
-    
-    //Serial.print("Pot1: ");
     int pot1 = analogRead(15);
     int pot1conv = round(pot1 / 32 - 15.5);
     int pot2 = analogRead(16);
@@ -117,59 +110,67 @@ void loop() {
     btn.update();
 
     
-    if (btn.fallingEdge())
-    {
-        Serial.println("Button press");
-        if (!stutter.isActive()) { stutter.snap(); } else { stutter.unlatch(); }
-    }
-    else if (btn.risingEdge()) {
-        Serial.println("Button release");
-        if (stutter.isActive()) { stutter.latch(); }
-    }
-
-    /*if (btn.fallingEdge())
-    {
-        State = !State;
-        Serial.println(State);
     
-        if (State == true)
-        {
-            mixer1.gain(1, 0.0f);
-            mixer1.gain(0, 1.0f);
-        }
-        else
-        {
-            mixer1.gain(0, 0.0f);
-            mixer1.gain(1, 1.0f);
-        }
-    }*/
-    
-    if (State != true)
+    if (PedalMode == 0)
     {
-        if (peak1.available())
+        if (btn.fallingEdge())
         {
-            float PeakPostEQ = peak1.read();
-            
-            Serial.println(PeakPostEQ);
-            
-            if (PeakPostEQ > 0.999)
+            State = !State;
+            Serial.println(State);
+        
+            if (State == true)
             {
-                Gain -= 0.1;
-                Level += 1;
-
-                amp1.gain(Gain);
-                sgtl5000_1.lineOutLevel(Level);
-
-                Serial.println(Gain);
-                Serial.println(Level);
+                mixer1.gain(1, 0.0f);
+                mixer1.gain(0, 1.0f);
+            }
+            else
+            {
+                mixer1.gain(0, 0.0f);
+                mixer1.gain(1, 1.0f);
             }
         }
+        
+        if (State != true)
+        {
+            if (peak1.available())
+            {
+                float PeakPostEQ = peak1.read();
+                
+                Serial.println(PeakPostEQ);
+                
+                if (PeakPostEQ > 0.999)
+                {
+                    Gain -= 0.1;
+                    Level += 1;
+    
+                    amp1.gain(Gain);
+                    sgtl5000_1.lineOutLevel(Level);
+    
+                    Serial.println(Gain);
+                    Serial.println(Level);
+                }
+            }
+        }
+        
+        
+        if (millis() - last > 50) {
+            biquad1.setPeaking(0, 6000 - pot1conv * 350, -pot3conv, 2);
+            biquad1.setPeaking(1, 4000 - pot2conv * 150, -pot4conv, 6);
+            last = millis();
+        }
+    }
+    else
+    {
+        if (btn.fallingEdge())
+        {
+            Serial.println("Button press");
+            if (!stutter.isActive()) { stutter.snap(); } else { stutter.unlatch(); }
+        }
+        else if (btn.risingEdge()) {
+            Serial.println("Button release");
+            if (stutter.isActive()) { stutter.latch(); }
+        }
     }
     
     
-    if (millis() - last > 50) {
-        biquad1.setPeaking(0, 6000 - pot1conv * 350, -pot3conv, 2);
-        biquad1.setPeaking(1, 4000 - pot2conv * 150, -pot4conv, 6);
-        last = millis();
-    }
 }
