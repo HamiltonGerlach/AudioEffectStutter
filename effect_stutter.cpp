@@ -4,18 +4,18 @@
 void AudioEffectStutter::update(void)
 {
 #if defined(__ARM_ARCH_7EM__)
-    audio_block_t *blocka;
-    int i;
+    audio_block_t *block;
+    int index;
     
-    blocka = receiveReadOnly(0);
-    if (!blocka) { return; }
+    block = receiveReadOnly(0);
+    if (!block) { return; }
     
     switch (state)
     {
         case 0:
             // Passthrough mode
-            transmit(blocka);
-            release(blocka);
+            transmit(block);
+            release(block);
             
             break;
             
@@ -23,8 +23,8 @@ void AudioEffectStutter::update(void)
             // Snap mode: Move active block to queue and pass audio through
             if (queue[position]) { release(queue[position]); }
             
-            queue[position] = blocka;
-            transmit(blocka);
+            queue[position] = block;
+            transmit(block);
             
             position = (position < (STUTTER_QUEUE_SIZE - 1)) ? position + 1 : 0;
             length = (length < (STUTTER_QUEUE_SIZE - 1)) ? length + 1 : length;
@@ -33,11 +33,11 @@ void AudioEffectStutter::update(void)
             
         case 2:
             // Latch mode: loop recorded blocks
-            release(blocka);
+            release(block);
             
-            i = (head + offset) % (STUTTER_QUEUE_SIZE - 1);
+            index = (head + offset) % (STUTTER_QUEUE_SIZE - 1);
             
-            if (queue[i]) { transmit(queue[i]); }
+            if (queue[index]) { transmit(queue[index]); }
             
             head = (head < (length - 1)) ? head + 1 : 0;
             
@@ -52,14 +52,16 @@ void AudioEffectStutter::update(void)
 }
 
 
-void AudioEffectStutter::snap() {
+void AudioEffectStutter::snap()
+{
     if (state == 1) { return; }
     
     offset = position;
     state = 1;
 }
 
-bool AudioEffectStutter::latch() {
+bool AudioEffectStutter::latch()
+{
     if (!state) { return false; }
     if (position == offset) { return false; }
     
@@ -69,7 +71,8 @@ bool AudioEffectStutter::latch() {
     return true;
 }
 
-void AudioEffectStutter::unlatch() {
+void AudioEffectStutter::unlatch()
+{
     if (!state) { return; }
     
     offset = 0;
@@ -79,14 +82,6 @@ void AudioEffectStutter::unlatch() {
     state = 0;
 }
 
-bool AudioEffectStutter::isActive() {
-    return (state > 0) ? true : false;
-}
-
-bool AudioEffectStutter::isSnapped() {
-    return (state == 1) ? true : false;
-}
-
-bool AudioEffectStutter::isLatched() {
-    return (state == 2) ? true : false;
-}
+bool AudioEffectStutter::isActive()  { return (state > 0)   ? true : false; }
+bool AudioEffectStutter::isSnapped() { return (state == 1)  ? true : false; }
+bool AudioEffectStutter::isLatched() { return (state == 2)  ? true : false; }
