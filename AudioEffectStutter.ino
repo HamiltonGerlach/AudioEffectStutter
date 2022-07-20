@@ -63,31 +63,47 @@ void setup()
     sgtl5000_1.micGain(0);
     sgtl5000_1.lineInLevel(0);
     sgtl5000_1.lineOutLevel(Level);
-    Serial.begin(9600);
     
     pinMode(PIN_SWITCH, INPUT_PULLUP);
+    
     pinMode(PIN_POT1, INPUT);
     pinMode(PIN_POT2, INPUT);
     pinMode(PIN_POT3, INPUT);
     pinMode(PIN_POT4, INPUT);
+    
+    pinMode(PIN_LED_R, OUTPUT);
+    pinMode(PIN_LED_G, OUTPUT);
+    pinMode(PIN_LED_B, OUTPUT);
     
     Gain1 = (EEPROM.read(EEPROM_GAIN1) - EEPROM_GAIN1_OFFSET) / EEPROM_GAIN1_SCALE;
     Gain2 = (EEPROM.read(EEPROM_GAIN2) - EEPROM_GAIN2_OFFSET) / EEPROM_GAIN2_SCALE;
     Freq1 = (EEPROM.read(EEPROM_FREQ1) - EEPROM_FREQ1_OFFSET) / EEPROM_FREQ1_SCALE;
     Freq2 = (EEPROM.read(EEPROM_FREQ2) - EEPROM_FREQ2_OFFSET) / EEPROM_FREQ2_SCALE;
     EqActive = EEPROM.read(EEPROM_EQSTATE);
-        
-    delay(2000);
     
-    if (digitalRead(PIN_SWITCH) == LOW) { PedalMode = 1; }
+    analogWrite(PIN_LED_G, Ducy(0.0f));
+    for (int i = 0; i < 8; i++) {
+        analogWrite(PIN_LED_R, Ducy(0.25f));
+        analogWrite(PIN_LED_B, Ducy(0.25f));
+        delay(125);
+        analogWrite(PIN_LED_R, Ducy(0.0f));
+        analogWrite(PIN_LED_B, Ducy(0.0f));
+        delay(125);
+    }
     
+    
+    if (digitalRead(PIN_SWITCH) == LOW) {
+        PedalMode = 1;
+    }
+    
+    Serial.begin(9600);
     Serial.println(EqActive);
     Serial.println(PedalMode);
     
     amp1.gain(PostEqGain);
     
     // Bypass EQ
-    if (EqActive == 0)
+    if (EqActive == 1)
     {        
         mixer1.gain(0, 0.0f);
         mixer1.gain(1, 1.0f);
@@ -98,13 +114,20 @@ void setup()
         mixer1.gain(1, 0.0f);
     }
     
-    
-    analogWrite(2, 1024);
-    analogWrite(3, 1024);
-    analogWrite(4, 1024);
-    
     biquad1.setPeaking(0, 6000 - Freq1 * 350, -Gain1 * 2, 2);
     biquad1.setPeaking(1, 4000 - Freq2 * 150, -Gain2 * 2, 6);
+    
+    if (PedalMode == 1)
+    {
+        for (int i = 0; i < 2; i++) {
+            analogWrite(PIN_LED_G, Ducy(0.25f));
+            analogWrite(PIN_LED_B, Ducy(0.25f));
+            delay(125);
+            analogWrite(PIN_LED_G, Ducy(0.0f));
+            analogWrite(PIN_LED_B, Ducy(0.0f));
+            delay(125);
+        }
+    }
 }
 
 int last = 0;
@@ -114,18 +137,17 @@ void loop() {
         if (peak_L.read() > 0.999) {
             ClippingTimer = millis();
             IsClipping = true;
-            analogWrite(3, 1024);
-            analogWrite(4, 1024);
-            analogWrite(2, 0);
+            analogWrite(PIN_LED_R, Ducy(0.25f));
+            analogWrite(PIN_LED_G, Ducy(0.0f));
+            analogWrite(PIN_LED_B, Ducy(0.0f));
         }
     }
     
     // Reset clipping LED
-    if (millis() - ClippingTimer > 1000) {
+    if ((IsClipping) && (millis() - ClippingTimer > 1000)) {
         IsClipping = false;
-        analogWrite(2, 1024);
+        analogWrite(PIN_LED_R, Ducy(0.0f));
     }
-    
     
     // Read pots
     int pot1 = analogRead(PIN_POT1);
@@ -164,32 +186,32 @@ void loop() {
         {
             if (EqActive == 0)
             {
-                mixer1.gain(1, 0.0f);
-                mixer1.gain(0, 1.0f);
+                mixer1.gain(0, 0.0f);
+                mixer1.gain(1, 1.0f);
                 
                 EqActive = 1;
+                
+                analogWrite(PIN_LED_G, Ducy(0.05f));
+                analogWrite(PIN_LED_B, Ducy(0.0f));
+                analogWrite(PIN_LED_R, Ducy(0.125f));
                 
                 Serial.println("Switching EQ on.");
             }
             else
             {
-                mixer1.gain(0, 0.0f);
-                mixer1.gain(1, 1.0f);
+                mixer1.gain(0, 1.0f);
+                mixer1.gain(1, 0.0f);
                 
                 EqActive = 0;
+                
+                analogWrite(PIN_LED_G, Ducy(0.125f));
+                analogWrite(PIN_LED_B, Ducy(0.125f));
+                analogWrite(PIN_LED_R, Ducy(0.0f));
                 
                 Serial.println("Switching EQ off.");
             }
         }
         
-        if (EqActive == 0) {
-            analogWrite(3, 1024);
-            analogWrite(4, 512);
-        }
-        else {
-            analogWrite(3, 1024);
-            analogWrite(4, 512);
-        }
         
         
         // Update EQ
@@ -218,6 +240,16 @@ void loop() {
                     EEPROM.write(EEPROM_GAIN1, pot3conv * EEPROM_GAIN1_SCALE + EEPROM_GAIN1_OFFSET);
                     EEPROM.write(EEPROM_GAIN2, pot4conv * EEPROM_GAIN2_SCALE + EEPROM_GAIN2_OFFSET);
                     EEPROM.write(EEPROM_EQSTATE, EqActive);
+                    
+                    analogWrite(PIN_LED_G, Ducy(0.0f));
+                    for (int i = 0; i < 4; i++) {
+                        analogWrite(PIN_LED_R, Ducy(0.25f));
+                        analogWrite(PIN_LED_B, Ducy(0.125f));
+                        delay(125);
+                        analogWrite(PIN_LED_R, Ducy(0.0f));
+                        analogWrite(PIN_LED_B, Ducy(0.0f));
+                        delay(125);
+                    }
                 }
             }
             else {
@@ -234,25 +266,27 @@ void loop() {
         if (btn.fallingEdge())
         {
             if (!stutter.isActive()) { stutter.snap(); 
-                analogWrite(3, 0);
-                analogWrite(4, 1024);
+                analogWrite(PIN_LED_G, Ducy(0.25f));
+                analogWrite(PIN_LED_B, Ducy(0.0f));
             } else {
                 stutter.unlatch();
-                analogWrite(3, 1024);
-                analogWrite(4, 1024);
+                analogWrite(PIN_LED_G, Ducy(0.0f));
+                analogWrite(PIN_LED_B, Ducy(0.0f));
             }
         }
         else if (btn.risingEdge())
         {
             if (stutter.isActive()) {
                 stutter.latch();
-                analogWrite(3, 1024);
-                analogWrite(4, 0);
+                analogWrite(PIN_LED_G, Ducy(0.0f));
+                analogWrite(PIN_LED_B, Ducy(0.25f));
             } else {
-                analogWrite(2, 1024);
-                analogWrite(4, 1024);
+                analogWrite(PIN_LED_G, Ducy(0.0f));
+                analogWrite(PIN_LED_B, Ducy(0.0f));
             }
         }
+        
+        
         
         
         if (millis() - last > 50) {

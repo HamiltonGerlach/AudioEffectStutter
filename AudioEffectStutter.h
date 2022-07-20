@@ -22,6 +22,12 @@
 #define EEPROM_FREQ2_SCALE 1
 #define EEPROM_FREQ2_OFFSET 16
 
+#define PIN_LED_R 2
+#define PIN_LED_G 3
+#define PIN_LED_B 4
+
 #define EQSAVETIMER 3000
+
+inline int Ducy(float Percent) { return 256 - (int)floor(Percent * 256); }
 
 #endif
