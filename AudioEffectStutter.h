@@ -27,7 +27,6 @@
 #define PIN_LED_B 4
 
 #define EQSAVETIMER 3000
-
-inline int Ducy(float Percent) { return 256 - (int)floor(Percent * 256); }
+#define RETRIGGER_EXIT_TIME 2000
 
 #endif

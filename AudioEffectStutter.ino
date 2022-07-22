@@ -8,6 +8,7 @@
 
 #include "AudioEffectStutter.h"
 #include "effect_stutter.h"
+#include "CtrlLED.h"
 
 AudioInputI2S                       audioInput;         //xy=471,791
 AudioAnalyzePeak                    peak_L;                 //xy=803,448
@@ -35,6 +36,7 @@ AudioConnection                     patchCord5(audioInput, 1, peak_R, 0);
 AudioConnection                     patchCord6(audioInput, 1, audioOutput, 1);
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 
+CtrlLED LED = CtrlLED();
 
 bool IsClipping = false;
 unsigned long ClippingTimer = 0;
@@ -42,7 +44,10 @@ unsigned long ClippingTimer = 0;
 bool SwitchPressed = false;
 unsigned long SwitchTimer = 0;
 
-int PedalMode = 0; // 0 ... Stutter, EQ setup
+int PedalMode = 0; // 0 ... Stutter, 1 ... EQ setup
+int LoopMode = 0; // 0 ... Latch, 1 ... Momentary, 2 ... Chaotic?
+
+bool Retrigger = 0;
 
 Bounce btn = Bounce(PIN_SWITCH, 50);
 
@@ -81,24 +86,13 @@ void setup()
     Freq2 = (EEPROM.read(EEPROM_FREQ2) - EEPROM_FREQ2_OFFSET) / EEPROM_FREQ2_SCALE;
     EqActive = EEPROM.read(EEPROM_EQSTATE);
     
-    analogWrite(PIN_LED_G, Ducy(0.0f));
     for (int i = 0; i < 8; i++) {
-        analogWrite(PIN_LED_R, Ducy(0.25f));
-        analogWrite(PIN_LED_B, Ducy(0.25f));
-        delay(125);
-        analogWrite(PIN_LED_R, Ducy(0.0f));
-        analogWrite(PIN_LED_B, Ducy(0.0f));
-        delay(125);
+        LED.SetRGB(0.25f, 0.0f, 0.25f); delay(125);
+        LED.Flush(); delay(125);
     }
     
     
-    if (digitalRead(PIN_SWITCH) == LOW) {
-        PedalMode = 1;
-    }
-    
-    Serial.begin(9600);
-    Serial.println(EqActive);
-    Serial.println(PedalMode);
+    if (digitalRead(PIN_SWITCH) == LOW) { PedalMode = 1; }
     
     amp1.gain(PostEqGain);
     
@@ -120,35 +114,22 @@ void setup()
     if (PedalMode == 1)
     {
         for (int i = 0; i < 2; i++) {
-            analogWrite(PIN_LED_G, Ducy(0.25f));
-            analogWrite(PIN_LED_B, Ducy(0.25f));
-            delay(125);
-            analogWrite(PIN_LED_G, Ducy(0.0f));
-            analogWrite(PIN_LED_B, Ducy(0.0f));
-            delay(125);
+            LED.SetRGB(0.0f, 0.25f, 0.25f); delay(125);
+            LED.Flush(); delay(125);
         }
+        
+        if (EqActive == 0)  { LED.SetRGB(0.125f, 0.05f, 0.0f);  }
+        else                { LED.SetRGB(0.0f, 0.125f, 0.125f); }
     }
+    
+    
+    Serial.begin(9600);
 }
 
+
+
 int last = 0;
-void loop() {
-    // Monitor clipping
-    if (peak_L.available()) {
-        if (peak_L.read() > 0.999) {
-            ClippingTimer = millis();
-            IsClipping = true;
-            analogWrite(PIN_LED_R, Ducy(0.25f));
-            analogWrite(PIN_LED_G, Ducy(0.0f));
-            analogWrite(PIN_LED_B, Ducy(0.0f));
-        }
-    }
-    
-    // Reset clipping LED
-    if ((IsClipping) && (millis() - ClippingTimer > 1000)) {
-        IsClipping = false;
-        analogWrite(PIN_LED_R, Ducy(0.0f));
-    }
-    
+void loop() {    
     // Read pots
     int pot1 = analogRead(PIN_POT1);
     int pot2 = analogRead(PIN_POT2);
@@ -164,19 +145,20 @@ void loop() {
     if (rms1.available())
     {
         // Debug output converted pot values
-        // Serial.print("Pot 1: ");
-        // Serial.print(pot1conv);
-        // Serial.print(", Pot 2: ");
-        // Serial.print(pot2conv);
-        // Serial.print(", Pot 3: ");
-        // Serial.print(pot3conv);
-        // Serial.print(", Pot 4: ");
-        // Serial.print(pot4conv);
-        // Serial.println(" ");
+        Serial.print("Pot 1: ");
+        Serial.print(pot1conv);
+        Serial.print(", Pot 2: ");
+        Serial.print(pot2conv);
+        Serial.print(", Pot 3: ");
+        Serial.print(pot3conv);
+        Serial.print(", Pot 4: ");
+        Serial.print(pot4conv);
+        Serial.println(" ");
     }
     
     btn.update();
 
+    
     
     
     if (PedalMode == 1)
@@ -190,12 +172,7 @@ void loop() {
                 mixer1.gain(1, 1.0f);
                 
                 EqActive = 1;
-                
-                analogWrite(PIN_LED_G, Ducy(0.05f));
-                analogWrite(PIN_LED_B, Ducy(0.0f));
-                analogWrite(PIN_LED_R, Ducy(0.125f));
-                
-                Serial.println("Switching EQ on.");
+                LED.SetRGB(0.125f, 0.05f, 0.0f);
             }
             else
             {
@@ -203,12 +180,7 @@ void loop() {
                 mixer1.gain(1, 0.0f);
                 
                 EqActive = 0;
-                
-                analogWrite(PIN_LED_G, Ducy(0.125f));
-                analogWrite(PIN_LED_B, Ducy(0.125f));
-                analogWrite(PIN_LED_R, Ducy(0.0f));
-                
-                Serial.println("Switching EQ off.");
+                LED.SetRGB(0.0f, 0.125f, 0.125f);
             }
         }
         
@@ -227,14 +199,7 @@ void loop() {
             if (SwitchPressed) {
                 if ((millis() - SwitchTimer) > EQSAVETIMER) {
                     PedalMode = 0;
-                    
-                    Serial.println("Writing EEPROM data.");
-                    Serial.println(EqActive);
-                    Serial.println(pot1conv);
-                    Serial.println(pot2conv);
-                    Serial.println(pot3conv);
-                    Serial.println(pot4conv);
-                    
+                                        
                     EEPROM.write(EEPROM_FREQ1, pot1conv * EEPROM_FREQ1_SCALE + EEPROM_FREQ1_OFFSET);
                     EEPROM.write(EEPROM_FREQ2, pot2conv * EEPROM_FREQ2_SCALE + EEPROM_FREQ2_OFFSET);
                     EEPROM.write(EEPROM_GAIN1, pot3conv * EEPROM_GAIN1_SCALE + EEPROM_GAIN1_OFFSET);
@@ -243,12 +208,8 @@ void loop() {
                     
                     analogWrite(PIN_LED_G, Ducy(0.0f));
                     for (int i = 0; i < 4; i++) {
-                        analogWrite(PIN_LED_R, Ducy(0.25f));
-                        analogWrite(PIN_LED_B, Ducy(0.125f));
-                        delay(125);
-                        analogWrite(PIN_LED_R, Ducy(0.0f));
-                        analogWrite(PIN_LED_B, Ducy(0.0f));
-                        delay(125);
+                        LED.SetRGB(0.25f, 0.0f, 0.125f); delay(125);
+                        LED.Flush(); delay(125);
                     }
                 }
             }
@@ -262,27 +223,57 @@ void loop() {
     }
     else
     {
+        
+        // Loop mode selection
+        if (pot2conv <= -8) {
+            LoopMode = 0;
+        }
+        else if (pot2conv > -8 && pot2conv < 8) {
+            LoopMode = 1;
+        }
+        else {
+            LoopMode = 2;
+        }
+        
+        // Retrigger mode selection
+        if (pot4conv <= 0) {
+            Retrigger = true;
+        } else {
+            Retrigger = false;
+        }
+        
+        
+        
+        if (Retrigger && SwitchPressed && ((millis() - SwitchTimer) > RETRIGGER_EXIT_TIME))
+        {
+            stutter.unlatch(); LED.Flush();
+        }
+        
         // Stutter / Looper control
         if (btn.fallingEdge())
         {
-            if (!stutter.isActive()) { stutter.snap(); 
-                analogWrite(PIN_LED_G, Ducy(0.25f));
-                analogWrite(PIN_LED_B, Ducy(0.0f));
+            SwitchPressed = true;
+            SwitchTimer = millis();
+            
+            if (!stutter.isActive()) {
+                stutter.snap();
+                LED.SetRGB(0.0f, 0.25f, 0.0f);
+                if (Retrigger) { LED.SetR(0.125f); }
             } else {
-                stutter.unlatch();
-                analogWrite(PIN_LED_G, Ducy(0.0f));
-                analogWrite(PIN_LED_B, Ducy(0.0f));
+                stutter.unlatch(); LED.Flush();
+                
+                if (Retrigger) {
+                    stutter.snap(); LED.SetRGB(0.125f, 0.25f, 0.0f);
+                }
             }
         }
         else if (btn.risingEdge())
         {
+            SwitchPressed = false;
+            
             if (stutter.isActive()) {
-                stutter.latch();
-                analogWrite(PIN_LED_G, Ducy(0.0f));
-                analogWrite(PIN_LED_B, Ducy(0.25f));
-            } else {
-                analogWrite(PIN_LED_G, Ducy(0.0f));
-                analogWrite(PIN_LED_B, Ducy(0.0f));
+                stutter.latch(); LED.SetRGB(0.0f, 0.0f, 0.25f);
+                if (Retrigger) { LED.SetR(0.125f); }
             }
         }
         
@@ -296,26 +287,38 @@ void loop() {
     
     
     
+    // Monitor post EQ clipping
     if (EqActive == true)
     {
-        // Monitor post EQ clipping
         if (peak1.available())
         {
-            float PeakPostEQ = peak1.read();
-            
-            if (PeakPostEQ > 0.999)
+            if (peak1.read() > 0.999)
             {
-                PostEqGain -= 0.1;
-                Level += 1;
+                PostEqGain -= 0.1; Level += 1;
 
                 amp1.gain(PostEqGain);
                 sgtl5000_1.lineOutLevel(Level);
-
-                Serial.println("Adapting post EQ gain:");
-                Serial.println(PostEqGain);
-                Serial.println(Level);
+                
+                // Serial.println("Adapting post EQ gain:");
+                // Serial.println(PostEqGain);
+                // Serial.println(Level);
             }
         }
     }
     
+    
+    
+    // Monitor clipping
+    if (peak_L.available()) {
+        if (peak_L.read() > 0.999) {
+            ClippingTimer = millis();
+            IsClipping = true;
+            LED.SetRGB(0.25f, 0.0f, 0.0f);
+        }
+    }
+    
+    // Reset clipping LED
+    if ((IsClipping) && (millis() - ClippingTimer > 1000)) {
+        IsClipping = false; LED.SetR(0.0f);
+    }
 }
