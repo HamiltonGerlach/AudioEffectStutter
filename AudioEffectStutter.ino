@@ -65,7 +65,7 @@ byte Freq1, Freq2;
 byte Gain1, Gain2;
 bool EqActive;
 
-int Blend, LoopLength;
+int Blend, LoopLength, FadeLength;
 
 void setup()
 {
@@ -247,6 +247,9 @@ void loop() {
         Retrigger = (pot4conv <= 0) ? true : false;
         LoopLength = round(((0x3FF - pot4) >> 1) * 2.5f) + LOOPLENGTH_MIN;
         
+        // Crossfade length
+        FadeLength = ((0x3FF - pot1) >> 2) + 1;
+        // Serial.println(FadeLength);
         
         
         switch (LoopMode) {
@@ -345,6 +348,8 @@ void loop() {
         
         // Adjust dry/wet blend
         if (ms - last > 50) {
+            stutter.setFade(FadeLength / 256.0f);
+            
             mixer_poststutter.gain(0, Blend <= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
             mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
             // Check pot values for crossfades, momentary/latch mode, dry/wet blend etc.
