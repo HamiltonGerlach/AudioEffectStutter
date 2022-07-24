@@ -14,7 +14,7 @@ void AudioEffectStutter::update(void)
     {
         case 0:
             // Passthrough mode
-            transmit(block);
+            // transmit(block);
             release(block);
             
             break;
@@ -24,7 +24,7 @@ void AudioEffectStutter::update(void)
             if (queue[position]) { release(queue[position]); }
             
             queue[position] = block;
-            transmit(block);
+            // transmit(block);
             
             position = (position < (STUTTER_QUEUE_SIZE - 1)) ? position + 1 : 0;
             length = (length < (STUTTER_QUEUE_SIZE - 1)) ? length + 1 : length;

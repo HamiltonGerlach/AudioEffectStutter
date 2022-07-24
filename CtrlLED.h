@@ -16,9 +16,12 @@ class CtrlLED {
         void SetG(float g);
         void SetB(float b);
         
+        void Restore(bool r, bool g, bool b);
+        
         CtrlLED();
     protected:
         bool State;
+        float red, green, blue;
 };
 
 
