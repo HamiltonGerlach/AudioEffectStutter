@@ -36,12 +36,13 @@ public:
     bool isSnapped(); // is snapped (listening)
     bool isLatched(); // is latched (looping)
     void setFade(float Fade); // set fade length - 0.0 (single sample declicking) to 1.0 (fading from half length)
+    void setBlend(float Blend); // 1.0f = maximum record volume, 0.0f = no record volume
 private:
 	audio_block_t *inputQueueArray[1];
 	audio_block_t *queue[STUTTER_QUEUE_SIZE];
     uint16_t position = 0, offset = 0, head = 0, length = 0; // 0 ... STUTTER_QUEUE_SIZE
     int state = 0, recent = 0; // 0 ... passthrough, 1 ... snap, 2 ... latch
-    float Fade;
+    float Fade, RecordBlend = 1.0f;
     bool FadeInDone = false;
     bool FadeOutDone = false;
 };

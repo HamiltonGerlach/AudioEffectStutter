@@ -5,8 +5,8 @@ void AudioEffectStutter::update(void)
 {
 #if defined(__ARM_ARCH_7EM__)
     audio_block_t *block;
-    int16_t *pa;
-    int16_t sample;
+    int16_t *pa, *cache;
+    int16_t sample, s_cache;
     int index;
     
     block = receiveWritable(0);
@@ -23,20 +23,23 @@ void AudioEffectStutter::update(void)
             
         case 1:
             // Snap mode: Move active block to queue and pass audio through
-            if (queue[position]) { release(queue[position]); }
+            if (queue[position]) {
+                cache = (int16_t *)queue[position]->data;
+                pa = (int16_t *)(block->data);
+                
+                for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
+                    sample = *pa;
+                    s_cache = *cache;
+                    *pa = (int16_t)(min(max((int32_t)(sample * RecordBlend + s_cache * (1.0f - RecordBlend)) * 1.5f, -32768), 32767));
+                    pa++; cache++;
+                }
+                
+                release(queue[position]);
+            }
             
             if (!FadeInDone) {
                 pa = (int16_t *)(block->data);
-                // 
-                // Serial.print(*pa); Serial.print(" : ");
-                // Serial.print(*(pa+1)); Serial.print(" : ");
-                // Serial.print(*(pa+2)); Serial.print(" : ");
-                // Serial.print(*(pa+3)); Serial.print(" : ");
-                // Serial.print(*(pa+4)); Serial.print(" : ");
-                // Serial.print(*(pa+5)); Serial.print(" : ");
-                // Serial.print(*(pa+6)); Serial.print(" : ");
-                // Serial.println(*(pa+7));
-                // 
+                
                 *pa++ = 0;
                 sample = *pa;
                 *pa++ = sample / 1024;
@@ -120,15 +123,6 @@ bool AudioEffectStutter::latch()
     if (block) {
         pa = (int16_t *)(block->data);
         
-        // Serial.print(*pa); Serial.print(" : ");
-        // Serial.print(*(pa+1)); Serial.print(" : ");
-        // Serial.print(*(pa+2)); Serial.print(" : ");
-        // Serial.print(*(pa+3)); Serial.print(" : ");
-        // Serial.print(*(pa+4)); Serial.print(" : ");
-        // Serial.print(*(pa+5)); Serial.print(" : ");
-        // Serial.print(*(pa+6)); Serial.print(" : ");
-        // Serial.println(*(pa+7));
-        
         pa = (int16_t *)(block->data + 7);
         *pa-- = 0;
         sample = *pa;
@@ -179,3 +173,10 @@ bool AudioEffectStutter::isSnapped() { return (state == 1)  ? true : false; }
 bool AudioEffectStutter::isLatched() { return (state == 2)  ? true : false; }
 
 void AudioEffectStutter::setFade(float Fade) { this->Fade = Fade; }
+
+void AudioEffectStutter::setBlend(float Blend)
+{
+	__disable_irq();
+    RecordBlend = Blend;
+    __enable_irq();
+}

@@ -59,7 +59,7 @@ Bounce btn = Bounce(PIN_SWITCH, 50);
 
 bool State = true, MomentarySnapped = false, Retrigger = false;
 int Level = 16;
-float PostEqGain = 1.0;
+float PostEqGain = 1.0, RecordBlend = 1.0;
 
 byte Freq1, Freq2;
 byte Gain1, Gain2;
@@ -227,7 +227,6 @@ void loop() {
         // Loop mode selection update
         if (pot2conv <= -8) {
             LoopMode = 3;
-            MomentarySnapped = false;
         }
         else if (pot2conv > -8 && pot2conv <= 0) {
             LoopMode = 2;
@@ -249,6 +248,7 @@ void loop() {
         
         // Crossfade length
         FadeLength = ((0x3FF - pot1) >> 2) + 1;
+        RecordBlend = (1023 - pot1) / 1023.0f;
         // Serial.println(FadeLength);
         
         
@@ -292,6 +292,7 @@ void loop() {
                 
             case 1: // Momentary mode, heads locked
             case 2: // Momentary mode, heads unlocked
+            case 3: // Momentary mode, short tap loops
                 
             
                 if (MomentarySnapped && ((ms - SwitchTimer) > LoopLength)) {
@@ -299,27 +300,42 @@ void loop() {
                     stutter.latch(); LED.SetRGB(0.25f, 0.25f, 0.0f);
                 }
                 if (stutter.isLatched() && (ms - SwitchTimer) >= MOMENTARY_FREEZE_TIMER) {
-                    if (!FreezeBlinking) // start blinking routine
-                    {
-                        FreezeBlinking = true;
-                        FreezeBlinkTimer = ms;
-                        LED.SetRGB(0.125f, 0.125f, 0.125f);
-                    }
-                    else {
-                        int BlinkPhase = (ms - FreezeBlinkTimer) % 200;
-                        if (BlinkPhase < 100) {
+                    MomentarySnapped = false;
+                    if (LoopMode == 3) {// != 3
+                    // {
+                    //     stutter.unlatch(); LED.Flush();
+                    // }
+                    // else {
+                        if (digitalRead(PIN_SWITCH) == LOW)
+                        {
+                            FreezeBlinking = false;
+                            stutter.unlatch();
+                            LED.Flush();
+                        }
+                    } else {
+                        
+                        if (!FreezeBlinking) // start blinking routine
+                        {
+                            FreezeBlinking = true;
+                            FreezeBlinkTimer = ms;
                             LED.SetRGB(0.125f, 0.125f, 0.125f);
                         }
-                        else
-                        {
-                            LED.Flush();
+                        else {
+                            int BlinkPhase = (ms - FreezeBlinkTimer) % 200;
+                            if (BlinkPhase < 100) {
+                                LED.SetRGB(0.125f, 0.125f, 0.125f);
+                            }
+                            else
+                            {
+                                LED.Flush();
+                            }
                         }
                     }
                 }
                 
                 if (btn.fallingEdge())
                 {
-                    if (LoopMode == 1) { stutter.unlatch(); }
+                    if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
                     if (!MomentarySnapped) {
                         stutter.snap(); LED.SetRGB(0.25f, 0.0f, 0.25f);
                         MomentarySnapped = true;
@@ -330,17 +346,13 @@ void loop() {
                     }
                     
                 } else if (btn.risingEdge()) {
-                    if ((ms - SwitchTimer) < MOMENTARY_FREEZE_TIMER)
+                    if (((ms - SwitchTimer) < MOMENTARY_FREEZE_TIMER) && (LoopMode != 3))
                     {
                         MomentarySnapped = false;
-                        if (LoopMode == 1) { stutter.unlatch(); }
+                        if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
                         stutter.snap(); LED.Flush();
                     }
                 }
-                
-                break;
-                
-            case 3: // Sound on sound mode?
                 
                 break;
         }
@@ -349,6 +361,7 @@ void loop() {
         // Adjust dry/wet blend
         if (ms - last > 50) {
             stutter.setFade(FadeLength / 256.0f);
+            stutter.setBlend(RecordBlend);
             
             mixer_poststutter.gain(0, Blend <= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
             mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
