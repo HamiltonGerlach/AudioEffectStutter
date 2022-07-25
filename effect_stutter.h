@@ -40,7 +40,7 @@ private:
 	audio_block_t *inputQueueArray[1];
 	audio_block_t *queue[STUTTER_QUEUE_SIZE];
     uint16_t position = 0, offset = 0, head = 0, length = 0; // 0 ... STUTTER_QUEUE_SIZE
-    int state = 0; // 0 ... passthrough, 1 ... snap, 2 ... latch
+    int state = 0, recent = 0; // 0 ... passthrough, 1 ... snap, 2 ... latch
     float Fade;
     bool FadeInDone = false;
     bool FadeOutDone = false;

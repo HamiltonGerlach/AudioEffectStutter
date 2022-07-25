@@ -27,7 +27,7 @@ void AudioEffectStutter::update(void)
             
             if (!FadeInDone) {
                 pa = (int16_t *)(block->data);
-                
+                // 
                 // Serial.print(*pa); Serial.print(" : ");
                 // Serial.print(*(pa+1)); Serial.print(" : ");
                 // Serial.print(*(pa+2)); Serial.print(" : ");
@@ -36,10 +36,12 @@ void AudioEffectStutter::update(void)
                 // Serial.print(*(pa+5)); Serial.print(" : ");
                 // Serial.print(*(pa+6)); Serial.print(" : ");
                 // Serial.println(*(pa+7));
-                
+                // 
                 *pa++ = 0;
                 sample = *pa;
-                *pa++ = 0;
+                *pa++ = sample / 1024;
+                sample = *pa;
+                *pa++ = sample / 256;
                 sample = *pa;
                 *pa++ = sample / 64;
                 sample = *pa;
@@ -47,12 +49,10 @@ void AudioEffectStutter::update(void)
                 sample = *pa;
                 *pa++ = sample / 8;
                 sample = *pa;
-                *pa++ = sample / 4;
-                sample = *pa;
                 *pa++ = sample / 2;
                 
-                pa = (int16_t *)(block->data);
-                
+                // pa = (int16_t *)(block->data);
+                // 
                 // Serial.print(*pa); Serial.print(" : ");
                 // Serial.print(*(pa+1)); Serial.print(" : ");
                 // Serial.print(*(pa+2)); Serial.print(" : ");
@@ -61,10 +61,11 @@ void AudioEffectStutter::update(void)
                 // Serial.print(*(pa+5)); Serial.print(" : ");
                 // Serial.print(*(pa+6)); Serial.print(" : ");
                 // Serial.println(*(pa+7));
-        		
+                // 
                 FadeInDone = true;
             }
             
+            recent = position;
             queue[position] = block;
             // transmit(block);
             
@@ -115,23 +116,44 @@ bool AudioEffectStutter::latch()
     if (!state) { return false; }
     if (position == offset) { return false; }
     
-    block = queue[position];
-    if (!block) { block = queue[(position-1) & STUTTER_QUEUE_END]; }
+    block = queue[recent];
     if (block) {
+        pa = (int16_t *)(block->data);
+        
+        // Serial.print(*pa); Serial.print(" : ");
+        // Serial.print(*(pa+1)); Serial.print(" : ");
+        // Serial.print(*(pa+2)); Serial.print(" : ");
+        // Serial.print(*(pa+3)); Serial.print(" : ");
+        // Serial.print(*(pa+4)); Serial.print(" : ");
+        // Serial.print(*(pa+5)); Serial.print(" : ");
+        // Serial.print(*(pa+6)); Serial.print(" : ");
+        // Serial.println(*(pa+7));
+        
         pa = (int16_t *)(block->data + 7);
         *pa-- = 0;
         sample = *pa;
-        *pa-- = 0;
+        *pa-- = sample / 1024;
         sample = *pa;
-        *pa-- = sample / 32;
+        *pa-- = sample / 256;
         sample = *pa;
         *pa-- = sample / 64;
         sample = *pa;
+        *pa-- = sample / 16;
+        sample = *pa;
         *pa-- = sample / 8;
         sample = *pa;
-        *pa-- = sample / 4;
-        sample = *pa;
         *pa-- = sample / 2;
+        
+        pa = (int16_t *)(block->data);
+        
+        // Serial.print(*pa); Serial.print(" : ");
+        // Serial.print(*(pa+1)); Serial.print(" : ");
+        // Serial.print(*(pa+2)); Serial.print(" : ");
+        // Serial.print(*(pa+3)); Serial.print(" : ");
+        // Serial.print(*(pa+4)); Serial.print(" : ");
+        // Serial.print(*(pa+5)); Serial.print(" : ");
+        // Serial.print(*(pa+6)); Serial.print(" : ");
+        // Serial.println(*(pa+7));
     }
     
     head = 0;
