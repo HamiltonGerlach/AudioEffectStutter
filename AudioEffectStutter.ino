@@ -25,7 +25,6 @@ AudioEffectStutter                  stutter;
 
 AudioConnection                     patchCord1(audioInput, 0, peak_L, 0);
 AudioConnection                     patchCord2(audioInput, 0, rms1, 0);
-
 AudioConnection                     patchCord3(audioInput, 0, biquad1, 0);
 AudioConnection                     patchCord4(audioInput, 0, mixer_posteq, 0);
 AudioConnection                     patchCord5(audioInput, 1, peak_R, 0);
@@ -39,6 +38,13 @@ AudioConnection                     patchCord10b(mixer_posteq, 0, mixer_poststut
 AudioConnection                     patchCord11(mixer_poststutter, 0, audioOutput, 0);
 
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
+
+FilterOnePole LP1_Pot1(LOWPASS, ANALOG_FILTER_FREQ);
+FilterOnePole LP1_Pot2(LOWPASS, ANALOG_FILTER_FREQ);
+FilterOnePole LP1_Pot3(LOWPASS, ANALOG_FILTER_FREQ);
+FilterOnePole LP1_Pot4(LOWPASS, ANALOG_FILTER_FREQ);
+
+Bounce btn = Bounce(PIN_SWITCH, SWITCH_DEB_TIME);
 
 CtrlLED LED = CtrlLED();
 
@@ -56,7 +62,6 @@ unsigned long ms = 0;
 int PedalMode = 0; // 0 ... Stutter, 1 ... EQ setup
 int LoopMode = 0; // 0 ... Latch, 1 ... Momentary, 2 ... Chaotic?
 
-Bounce btn = Bounce(PIN_SWITCH, 50);
 
 bool State = true, MomentarySnapped = false, Retrigger = false;
 int Level = 16;
@@ -69,16 +74,8 @@ bool EqActive;
 int Blend, LoopLength, FadeLength;
 
 
-float testFrequency = 1.0f;
-float windowLength = 20.0/testFrequency;
-FilterOnePole filterOneLowpass( LOWPASS, testFrequency );   // create a one pole (RC) lowpass filter
-RunningStatistics filterOneLowpassStats;                    // create running statistics to smooth these values
-
-
 void setup()
 {
-    filterOneLowpassStats.setWindowSecs(windowLength);
-    
     AudioMemory(14340);
     sgtl5000_1.enable();
     sgtl5000_1.inputSelect(AUDIO_INPUT_LINEIN);
@@ -105,8 +102,8 @@ void setup()
     EqActive = EEPROM.read(EEPROM_EQSTATE);
     
     for (int i = 0; i < 8; i++) {
-        LED.SetRGB(0.25f, 0.0f, 0.25f); delay(125);
-        LED.Flush(); delay(125);
+        LED.SetRGB(0.25f, 0.0f, 0.25f); delay(LED_BLINKTIME);
+        LED.Flush(); delay(LED_BLINKTIME);
     }
     
     
@@ -135,8 +132,8 @@ void setup()
     if (PedalMode == 1)
     {
         for (int i = 0; i < 2; i++) {
-            LED.SetRGB(0.0f, 0.25f, 0.25f); delay(125);
-            LED.Flush(); delay(125);
+            LED.SetRGB(0.0f, 0.25f, 0.25f); delay(LED_BLINKTIME);
+            LED.Flush(); delay(LED_BLINKTIME);
         }
         
         if (EqActive == 0)  { LED.SetRGB(0.125f, 0.05f, 0.0f);  }
@@ -150,26 +147,22 @@ void setup()
 
 
 int last = 0;
-void loop() {    
-    // Read pots
-    int pot1 = analogRead(PIN_POT1);
-    int pot2 = analogRead(PIN_POT2);
-    int pot3 = analogRead(PIN_POT3);
-    int pot4 = analogRead(PIN_POT4);
-    
-    float pot1conv = round(pot1 / 32.0f - 16);
-    float pot2conv = round(pot2 / 32.0f - 16);
-    float pot3conv = round(pot3 / 32.0f - 16);
-    float pot4conv = round(pot4 / 32.0f - 16);
-    
-    
-    if (rms1.available()) {}
-    
+float vPot[4]; vPotNorm[4];
+
+void loop() {
+    // Read pots and filter values
+    for (int i = 0; i < 4; i++) {
+        vPotNorm[i] = analogRead(PIN_POT[i]) * ANALOG_RESCALE;
+        
+        // Range check and border snap
+        if (vPotNorm[i] < ANALOG_SNAP_THRESHOLD) { vPotNorm[i] = 0.0f };
+        if (vPotNorm[i] > (1.0f - ANALOG_SNAP_THRESHOLD)) { vPotNorm[i] = 1.0f };
+        
+        vPot[i] = vPotNorm[i] * ANALOG_GAIN_RECPR - ANALOG_OFFSET;
+        filtPot[i].input(vPot[i]);
+    }
+        
     btn.update();
-    
-    
-    filterOneLowpass.input(pot1 / 32.0f - 16);
-    
     
     if (PedalMode == 1)
     {
@@ -218,8 +211,8 @@ void loop() {
                     
                     LED.SetG(0.0f); 
                     for (int i = 0; i < 4; i++) {
-                        LED.SetRGB(0.25f, 0.0f, 0.125f); delay(125);
-                        LED.Flush(); delay(125);
+                        LED.SetRGB(0.25f, 0.0f, 0.125f); delay(LED_BLINKTIME);
+                        LED.Flush(); delay(LED_BLINKTIME);
                     }
                 }
             }
