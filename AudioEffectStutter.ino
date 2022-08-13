@@ -5,6 +5,7 @@
 #include <SerialFlash.h>
 #include <Bounce.h>
 #include <EEPROM.h>
+#include <Filters.h>
 
 #include "AudioEffectStutter.h"
 #include "effect_stutter.h"
@@ -27,6 +28,8 @@ AudioConnection                     patchCord2(audioInput, 0, rms1, 0);
 
 AudioConnection                     patchCord3(audioInput, 0, biquad1, 0);
 AudioConnection                     patchCord4(audioInput, 0, mixer_posteq, 0);
+AudioConnection                     patchCord5(audioInput, 1, peak_R, 0);
+AudioConnection                     patchCord6(audioInput, 1, audioOutput, 1);
 AudioConnection                     patchCord7(biquad1, 0, amp1, 0);
 AudioConnection                     patchCord8(amp1, 0, peak1, 0);
 AudioConnection                     patchCord9(amp1, 0, mixer_posteq, 1);
@@ -35,8 +38,6 @@ AudioConnection                     patchCord10a(stutter, 0, mixer_poststutter, 
 AudioConnection                     patchCord10b(mixer_posteq, 0, mixer_poststutter, 1);
 AudioConnection                     patchCord11(mixer_poststutter, 0, audioOutput, 0);
 
-AudioConnection                     patchCord5(audioInput, 1, peak_R, 0);
-AudioConnection                     patchCord6(audioInput, 1, audioOutput, 1);
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 
 CtrlLED LED = CtrlLED();
@@ -67,8 +68,17 @@ bool EqActive;
 
 int Blend, LoopLength, FadeLength;
 
+
+float testFrequency = 1.0f;
+float windowLength = 20.0/testFrequency;
+FilterOnePole filterOneLowpass( LOWPASS, testFrequency );   // create a one pole (RC) lowpass filter
+RunningStatistics filterOneLowpassStats;                    // create running statistics to smooth these values
+
+
 void setup()
 {
+    filterOneLowpassStats.setWindowSecs(windowLength);
+    
     AudioMemory(14340);
     sgtl5000_1.enable();
     sgtl5000_1.inputSelect(AUDIO_INPUT_LINEIN);
@@ -147,17 +157,18 @@ void loop() {
     int pot3 = analogRead(PIN_POT3);
     int pot4 = analogRead(PIN_POT4);
     
-    int pot1conv = round(pot1 / 32.0f - 16);
-    int pot2conv = round(pot2 / 32.0f - 16);
-    int pot3conv = round(pot3 / 32.0f - 16);
-    int pot4conv = round(pot4 / 32.0f - 16);
+    float pot1conv = round(pot1 / 32.0f - 16);
+    float pot2conv = round(pot2 / 32.0f - 16);
+    float pot3conv = round(pot3 / 32.0f - 16);
+    float pot4conv = round(pot4 / 32.0f - 16);
     
     
     if (rms1.available()) {}
     
     btn.update();
-
     
+    
+    filterOneLowpass.input(pot1 / 32.0f - 16);
     
     
     if (PedalMode == 1)
@@ -360,11 +371,16 @@ void loop() {
         
         // Adjust dry/wet blend
         if (ms - last > 50) {
+            Serial.print(pot1 / 32.0f - 16); Serial.print("; filtered");
+            Serial.println(filterOneLowpass.output());
             stutter.setFade(FadeLength / 256.0f);
             stutter.setBlend(RecordBlend);
             
             mixer_poststutter.gain(0, Blend <= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
             mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
+            
+            
+            last = millis();
             // Check pot values for crossfades, momentary/latch mode, dry/wet blend etc.
         }
     }
