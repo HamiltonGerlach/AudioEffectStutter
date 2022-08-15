@@ -6,6 +6,7 @@
 #include <Bounce.h>
 #include <EEPROM.h>
 #include <Filters.h>
+#include <vector>
 
 #include "AudioEffectStutter.h"
 #include "effect_stutter.h"
@@ -39,10 +40,13 @@ AudioConnection                     patchCord11(mixer_poststutter, 0, audioOutpu
 
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 
-FilterOnePole LP1_Pot1(LOWPASS, ANALOG_FILTER_FREQ);
-FilterOnePole LP1_Pot2(LOWPASS, ANALOG_FILTER_FREQ);
-FilterOnePole LP1_Pot3(LOWPASS, ANALOG_FILTER_FREQ);
-FilterOnePole LP1_Pot4(LOWPASS, ANALOG_FILTER_FREQ);
+
+FilterTwoPole* filtPot = new FilterTwoPole[4];
+
+// FilterOnePole LP1_Pot1(LOWPASS, ANALOG_FILTER_FREQ);
+// FilterOnePole LP1_Pot2(LOWPASS, ANALOG_FILTER_FREQ);
+// FilterOnePole LP1_Pot3(LOWPASS, ANALOG_FILTER_FREQ);
+// FilterOnePole LP1_Pot4(LOWPASS, ANALOG_FILTER_FREQ);
 
 Bounce btn = Bounce(PIN_SWITCH, SWITCH_DEB_TIME);
 
@@ -76,6 +80,10 @@ int Blend, LoopLength, FadeLength;
 
 void setup()
 {
+    for (int i = 0; i < 4; i++) {
+        filtPot[i].setAsFilter(LOWPASS_BUTTERWORTH, ANALOG_FILTER_FREQ);
+    }
+    
     AudioMemory(14340);
     sgtl5000_1.enable();
     sgtl5000_1.inputSelect(AUDIO_INPUT_LINEIN);
@@ -147,19 +155,17 @@ void setup()
 
 
 int last = 0;
-float vPot[4]; vPotNorm[4];
+float vPot[4], vPotNorm[4];
 
 void loop() {
     // Read pots and filter values
     for (int i = 0; i < 4; i++) {
-        vPotNorm[i] = analogRead(PIN_POT[i]) * ANALOG_RESCALE;
+        float reading = analogRead(PIN_POT[i]) * ANALOG_RESCALE + ANALOG_SHIFT;
         
-        // Range check and border snap
-        if (vPotNorm[i] < ANALOG_SNAP_THRESHOLD) { vPotNorm[i] = 0.0f };
-        if (vPotNorm[i] > (1.0f - ANALOG_SNAP_THRESHOLD)) { vPotNorm[i] = 1.0f };
+        if (reading < ANALOG_SNAP_THRESHOLD * 2) { reading = 0.0f; }
+        if (reading > 1.0f - ANALOG_SNAP_THRESHOLD * 2) { reading = 1.0f; }
         
-        vPot[i] = vPotNorm[i] * ANALOG_GAIN_RECPR - ANALOG_OFFSET;
-        filtPot[i].input(vPot[i]);
+        filtPot[i].input(reading);
     }
         
     btn.update();
@@ -191,8 +197,8 @@ void loop() {
         
         // Update EQ
         if (millis() - last > 50) {
-            biquad1.setPeaking(0, 6000 - pot1conv * 350, -pot3conv * 2, 2);
-            biquad1.setPeaking(1, 4000 - pot2conv * 150, -pot4conv * 2, 6);
+            biquad1.setPeaking(0, 6000 - vPot[0] * 350, -vPot[2] * 2, 2);
+            biquad1.setPeaking(1, 4000 - vPot[1] * 150, -vPot[3] * 2, 6);
             last = millis();
         }
         
@@ -203,10 +209,10 @@ void loop() {
                 if ((millis() - SwitchTimer) > EQSAVE_TIMER) {
                     PedalMode = 0;
                                         
-                    EEPROM.write(EEPROM_FREQ1, pot1conv * EEPROM_FREQ1_SCALE + EEPROM_FREQ1_OFFSET);
-                    EEPROM.write(EEPROM_FREQ2, pot2conv * EEPROM_FREQ2_SCALE + EEPROM_FREQ2_OFFSET);
-                    EEPROM.write(EEPROM_GAIN1, pot3conv * EEPROM_GAIN1_SCALE + EEPROM_GAIN1_OFFSET);
-                    EEPROM.write(EEPROM_GAIN2, pot4conv * EEPROM_GAIN2_SCALE + EEPROM_GAIN2_OFFSET);
+                    EEPROM.write(EEPROM_FREQ1, vPot[0] * EEPROM_FREQ1_SCALE + EEPROM_FREQ1_OFFSET);
+                    EEPROM.write(EEPROM_FREQ2, vPot[1] * EEPROM_FREQ2_SCALE + EEPROM_FREQ2_OFFSET);
+                    EEPROM.write(EEPROM_GAIN1, vPot[2] * EEPROM_GAIN1_SCALE + EEPROM_GAIN1_OFFSET);
+                    EEPROM.write(EEPROM_GAIN2, vPot[3] * EEPROM_GAIN2_SCALE + EEPROM_GAIN2_OFFSET);
                     EEPROM.write(EEPROM_EQSTATE, EqActive);
                     
                     LED.SetG(0.0f); 
@@ -229,13 +235,13 @@ void loop() {
         ms = millis();
         
         // Loop mode selection update
-        if (pot2conv <= -8) {
+        if (vPot[1] <= -8) {
             LoopMode = 3;
         }
-        else if (pot2conv > -8 && pot2conv <= 0) {
+        else if (vPot[1] > -8 && vPot[1] <= 0) {
             LoopMode = 2;
         }
-        else if (pot2conv > 0 && pot2conv <= 8) {
+        else if (vPot[1] > 0 && vPot[1] <= 8) {
             LoopMode = 1;
         }
         else {
@@ -244,15 +250,17 @@ void loop() {
         }
         
         // Blend update
-        Blend = pot3conv;
+        Blend = vPot[2];
         
         // Retrigger mode / loop length update
-        Retrigger = (pot4conv <= 0) ? true : false;
-        LoopLength = round(((0x3FF - pot4) >> 1) * 2.5f) + LOOPLENGTH_MIN;
+        Retrigger = (vPot[3] <= 0) ? true : false;
+        LoopLength = (1.0f - vPotNorm[3]) * 1280 + LOOPLENGTH_MIN;
         
         // Crossfade length
-        FadeLength = ((0x3FF - pot1) >> 2) + 1;
-        RecordBlend = (1023 - pot1) / 1023.0f;
+        
+            
+        FadeLength = vPotNorm[0] / 4.0f + 1;
+        RecordBlend = 1.0f - vPotNorm[0];
         // Serial.println(FadeLength);
         
         
@@ -271,14 +279,15 @@ void loop() {
                     SwitchTimer = ms;
                     
                     if (!stutter.isActive()) {
-                        stutter.snap();
+                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
                         LED.SetRGB(0.0f, 0.25f, 0.0f);
                         if (Retrigger) { LED.SetR(0.125f); }
                     } else {
                         stutter.unlatch(); LED.Flush();
                         
                         if (Retrigger) {
-                            stutter.snap(); LED.SetRGB(0.125f, 0.25f, 0.0f);
+                            if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                            LED.SetRGB(0.125f, 0.25f, 0.0f);
                         }
                     }
                 }
@@ -341,12 +350,15 @@ void loop() {
                 {
                     if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
                     if (!MomentarySnapped) {
-                        stutter.snap(); LED.SetRGB(0.25f, 0.0f, 0.25f);
+                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                            
+                        LED.SetRGB(0.25f, 0.0f, 0.25f);
                         MomentarySnapped = true;
                         SwitchTimer = ms;
                     } else {
                         MomentarySnapped = false;
-                        stutter.snap(); LED.Flush();
+                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                        LED.Flush();
                     }
                     
                 } else if (btn.risingEdge()) {
@@ -354,7 +366,8 @@ void loop() {
                     {
                         MomentarySnapped = false;
                         if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
-                        stutter.snap(); LED.Flush();
+                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                        LED.Flush();
                     }
                 }
                 
@@ -364,8 +377,21 @@ void loop() {
         
         // Adjust dry/wet blend
         if (ms - last > 50) {
-            Serial.print(pot1 / 32.0f - 16); Serial.print("; filtered");
-            Serial.println(filterOneLowpass.output());
+            
+            
+            for (int i = 0; i < 4; i++) {
+                vPotNorm[i] = filtPot[i].output();
+                
+                // Range check and border snap
+                if (vPotNorm[i] < ANALOG_SNAP_THRESHOLD) { vPotNorm[i] = 0.0f; }
+                if (vPotNorm[i] > (1.0f - ANALOG_SNAP_THRESHOLD)) { vPotNorm[i] = 1.0f; }
+                
+                vPot[i] = vPotNorm[i] * ANALOG_GAIN_RECPR - ANALOG_OFFSET;
+                
+                Serial.print(vPot[i], 6); Serial.print(" > --- ");
+            }
+            Serial.println("");
+            
             stutter.setFade(FadeLength / 256.0f);
             stutter.setBlend(RecordBlend);
             

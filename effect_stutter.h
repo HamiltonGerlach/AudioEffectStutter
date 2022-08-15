@@ -32,9 +32,11 @@ public:
     void snap(); // snap (set loop start)
     bool latch(); // latch (loop from start to current position)
     void unlatch(); // release and return to passthrough mode
+    void dub(); // latch + record over
     bool isActive(); // is snapped (listening) or latched (looping)
     bool isSnapped(); // is snapped (listening)
     bool isLatched(); // is latched (looping)
+    bool isDubbing(); // is dubbing
     void setFade(float Fade); // set fade length - 0.0 (single sample declicking) to 1.0 (fading from half length)
     void setBlend(float Blend); // 1.0f = maximum record volume, 0.0f = no record volume
 private:
