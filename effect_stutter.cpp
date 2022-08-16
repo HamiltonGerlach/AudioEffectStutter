@@ -23,7 +23,7 @@ void AudioEffectStutter::update(void)
             break;
             
         case 1:
-            Serial.print(RecordBlend);
+            // Serial.print(RecordBlend);
             // Snap mode: Move active block to queue and pass audio through
             if (queue[position]) {
                 cache = (int16_t *)queue[position]->data;
@@ -93,7 +93,9 @@ void AudioEffectStutter::update(void)
             
             mirror = (int)(offset + fadeA * length) % STUTTER_QUEUE_END;
             release(block);
+            
             if (queue[index]) { transmit(queue[index]); }
+            
             head = (head < (length - 1)) ? head + 1 : 0;
             
             break;
@@ -121,7 +123,7 @@ void AudioEffectStutter::update(void)
                     sample = *pa;
                     s_cache = *pma;
                     *cache = (int16_t)(sample * fadeA + s_cache * fadeB);
-                    Serial.print(*pma); Serial.print("; ");
+                    //Serial.print(*pma); Serial.print("; ");
                     pa++; pma++; cache++;
                 }
                 Serial.println("");
@@ -162,15 +164,17 @@ void AudioEffectStutter::update(void)
             if (queue[index]) {
                 pa = (int16_t *)queue[index]->data;
                 cache = (int16_t *)(block->data);
-                    
+                
+                
+                transmit(queue[index]);
+                
                 for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
                     sample = *pa;
                     s_cache = *cache;
-                    *pa = (int16_t)(min(max((int32_t)(sample * (RecordBlend + 1.0f) / 2.0f + s_cache * (1.0f - RecordBlend)) * 1.0f, -32768), 32767));
+                    *pa = (int16_t)(min(max((int32_t)(sample * (RecordBlend) + s_cache * (1.0f - RecordBlend)) * 1.0f, -32768), 32767));
                     pa++; cache++;
                 }
                 
-                transmit(queue[index]);
             }
             head = (head < (length - 1)) ? head + 1 : 0;
             
@@ -235,6 +239,8 @@ void AudioEffectStutter::snap()
 {
     if (state == 1) { return; }
     
+    Serial.println("Snap");
+    
     FadeInDone = false;
     
     offset = position;
@@ -283,6 +289,9 @@ bool AudioEffectStutter::latch()
         // Serial.println(*(pa+7));
     }
     
+    
+    Serial.println("Latch");
+    
     head = 0;
     state = 2;
     
@@ -293,13 +302,19 @@ bool AudioEffectStutter::latch()
 void AudioEffectStutter::dub()
 {
 	__disable_irq();
-    if (state > 0) { state = 3; }
+    if (state > 0) { state = 3; } else { __enable_irq(); return; }
+    
+    Serial.println("Dub");
+    
     __enable_irq();
 }
 
 void AudioEffectStutter::unlatch()
 {
     if (!state) { return; }
+    
+    
+    Serial.println("Unlatch");
     
     offset = 0;
     head = 0;

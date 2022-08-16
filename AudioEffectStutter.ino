@@ -167,6 +167,16 @@ void loop() {
         
         filtPot[i].input(reading);
     }
+    
+    for (int i = 0; i < 4; i++) {
+        vPotNorm[i] = filtPot[i].output();
+        
+        // Range check and border snap
+        if (vPotNorm[i] < ANALOG_SNAP_THRESHOLD) { vPotNorm[i] = 0.0f; }
+        if (vPotNorm[i] > (1.0f - ANALOG_SNAP_THRESHOLD)) { vPotNorm[i] = 1.0f; }
+        
+        vPot[i] = vPotNorm[i] * ANALOG_GAIN_RECPR - ANALOG_OFFSET;
+    }
         
     btn.update();
     
@@ -267,7 +277,7 @@ void loop() {
         switch (LoopMode) {
             case 0: // Latch mode
                 
-                if (Retrigger && SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
+                if (SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
                 {
                     stutter.unlatch(); LED.Flush();
                 }
@@ -279,15 +289,22 @@ void loop() {
                     SwitchTimer = ms;
                     
                     if (!stutter.isActive()) {
-                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                        stutter.snap();
                         LED.SetRGB(0.0f, 0.25f, 0.0f);
+                        
                         if (Retrigger) { LED.SetR(0.125f); }
                     } else {
-                        stutter.unlatch(); LED.Flush();
+                        if (stutter.isLatched() && !Retrigger) { 
+                            stutter.dub();
+                            LED.SetRGB(0.125f, 0.25f, 0.25f);
+                        }
+                        else {
+                            stutter.unlatch(); LED.Flush();
                         
-                        if (Retrigger) {
-                            if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
-                            LED.SetRGB(0.125f, 0.25f, 0.0f);
+                            if (Retrigger) {
+                                stutter.snap();
+                                LED.SetRGB(0.125f, 0.25f, 0.0f);
+                            }
                         }
                     }
                 }
@@ -350,14 +367,16 @@ void loop() {
                 {
                     if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
                     if (!MomentarySnapped) {
-                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                        if (stutter.isLatched()) { stutter.dub(); 
+                        LED.SetRGB(0.125f, 0.25f, 0.25f); } else { stutter.snap(); }
                             
                         LED.SetRGB(0.25f, 0.0f, 0.25f);
                         MomentarySnapped = true;
                         SwitchTimer = ms;
                     } else {
                         MomentarySnapped = false;
-                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                        if (stutter.isLatched()) { stutter.dub(); 
+                        LED.SetRGB(0.125f, 0.25f, 0.25f); } else { stutter.snap(); }
                         LED.Flush();
                     }
                     
@@ -366,7 +385,8 @@ void loop() {
                     {
                         MomentarySnapped = false;
                         if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
-                        if (stutter.isLatched()) { stutter.dub(); } else { stutter.snap(); }
+                        if (stutter.isLatched()) { stutter.dub(); 
+                        LED.SetRGB(0.125f, 0.25f, 0.25f);} else { stutter.snap(); }
                         LED.Flush();
                     }
                 }
@@ -377,21 +397,6 @@ void loop() {
         
         // Adjust dry/wet blend
         if (ms - last > 50) {
-            
-            
-            for (int i = 0; i < 4; i++) {
-                vPotNorm[i] = filtPot[i].output();
-                
-                // Range check and border snap
-                if (vPotNorm[i] < ANALOG_SNAP_THRESHOLD) { vPotNorm[i] = 0.0f; }
-                if (vPotNorm[i] > (1.0f - ANALOG_SNAP_THRESHOLD)) { vPotNorm[i] = 1.0f; }
-                
-                vPot[i] = vPotNorm[i] * ANALOG_GAIN_RECPR - ANALOG_OFFSET;
-                
-                Serial.print(vPot[i], 6); Serial.print(" > --- ");
-            }
-            Serial.println("");
-            
             stutter.setFade(FadeLength / 256.0f);
             stutter.setBlend(RecordBlend);
             
