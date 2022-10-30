@@ -17,13 +17,10 @@ void AudioEffectStutter::update(void)
     {
         case 0:
             // Passthrough mode
-            // transmit(block);
             release(block);
-            
             break;
             
         case 1:
-            // Serial.print(RecordBlend);
             // Snap mode: Move active block to queue and pass audio through
             if (queue[position]) {
                 cache = (int16_t *)queue[position]->data;
@@ -56,17 +53,6 @@ void AudioEffectStutter::update(void)
                 sample = *pa;
                 *pa++ = sample / 2;
                 
-                // pa = (int16_t *)(block->data);
-                // 
-                // Serial.print(*pa); Serial.print(" : ");
-                // Serial.print(*(pa+1)); Serial.print(" : ");
-                // Serial.print(*(pa+2)); Serial.print(" : ");
-                // Serial.print(*(pa+3)); Serial.print(" : ");
-                // Serial.print(*(pa+4)); Serial.print(" : ");
-                // Serial.print(*(pa+5)); Serial.print(" : ");
-                // Serial.print(*(pa+6)); Serial.print(" : ");
-                // Serial.println(*(pa+7));
-                // 
                 FadeInDone = true;
             }
             
@@ -81,91 +67,28 @@ void AudioEffectStutter::update(void)
             
         case 2:
             // Latch mode: loop recorded blocks
-            
-            // TODO: apply current input instead of releasing to achieve sound-on-sound mode
-            
-            
-            
             index = (head + offset) % STUTTER_QUEUE_END;
-            
-            fadeB = (float)head / length;
-            fadeA = 1.0f - fadeB;
-            
-            mirror = (int)(offset + fadeA * length) % STUTTER_QUEUE_END;
             release(block);
             
             if (queue[index]) { transmit(queue[index]); }
             
             head = (head < (length - 1)) ? head + 1 : 0;
             
-            break;
+            if (head == 0) {
+                this->Gain -= this->Decay;
+                if (this->Gain <= 0.0f) { this->drop(); }
+            }
             
-            // Serial.print(index); Serial.print("; "); Serial.println(mirror);
-            // dist = floor(length / 2) - index;
-            // mirror = (int)(floor(length / 2) + 1 + dist) % STUTTER_QUEUE_END;
-            
-            
-            // if (queue[index]) { pa = (int16_t *)(queue[index]->data); } //{ transmit(queue[index]); }
-            // if (!queue[mirror]) { release(block); break; }
-            
-            fadeBlock = allocate();
-            release(block);
-            
-            
-            if (queue[index] && queue[mirror])
-            {
-                cache = (int16_t *)fadeBlock->data;
-                pa = (int16_t *)queue[index]->data;
-                pma = (int16_t *)queue[index]->data;
-                
-                
-                for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
-                    sample = *pa;
-                    s_cache = *pma;
-                    *cache = (int16_t)(sample * fadeA + s_cache * fadeB);
-                    //Serial.print(*pma); Serial.print("; ");
-                    pa++; pma++; cache++;
-                }
-                Serial.println("");
-                
-            } 
-            // else
-            // {
-            //     if (queue[index]) {
-            //         cache = (int16_t *)fadeBlock->data;
-            //         pa = (int16_t *)queue[index]->data;
-            //         memcpy(cache, pa, sizeof(int16_t) * AUDIO_BLOCK_SAMPLES);
-            //     }
-            // }
-            
-            transmit(fadeBlock);
-            release(fadeBlock);
-            
-            head = (head < (length - 1)) ? head + 1 : 0;
             break;
             
         case 3:
             // Dubbing mode: loop recorded blocks while dubbing (recording) over
-            
-            // TODO: apply current input instead of releasing to achieve sound-on-sound mode
-            
-            
-            
             index = (head + offset) % STUTTER_QUEUE_END;
-            
-            fadeB = (float)head / length;
-            fadeA = 1.0f - fadeB;
-            
-            mirror = (int)(offset + fadeA * length) % STUTTER_QUEUE_END;
-            
-            
-            
-            
+                        
             if (queue[index]) {
                 pa = (int16_t *)queue[index]->data;
                 cache = (int16_t *)(block->data);
-                
-                
+                                
                 transmit(queue[index]);
                 
                 for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
@@ -180,50 +103,6 @@ void AudioEffectStutter::update(void)
             
             release(block);
             
-            break;
-            
-            // Serial.print(index); Serial.print("; "); Serial.println(mirror);
-            // dist = floor(length / 2) - index;
-            // mirror = (int)(floor(length / 2) + 1 + dist) % STUTTER_QUEUE_END;
-            
-            
-            // if (queue[index]) { pa = (int16_t *)(queue[index]->data); } //{ transmit(queue[index]); }
-            // if (!queue[mirror]) { release(block); break; }
-            
-            fadeBlock = allocate();
-            release(block);
-            
-            
-            if (queue[index] && queue[mirror])
-            {
-                cache = (int16_t *)fadeBlock->data;
-                pa = (int16_t *)queue[index]->data;
-                pma = (int16_t *)queue[index]->data;
-                
-                
-                for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
-                    sample = *pa;
-                    s_cache = *pma;
-                    *cache = (int16_t)(sample * fadeA + s_cache * fadeB);
-                    Serial.print(*pma); Serial.print("; ");
-                    pa++; pma++; cache++;
-                }
-                Serial.println("");
-                
-            } 
-            // else
-            // {
-            //     if (queue[index]) {
-            //         cache = (int16_t *)fadeBlock->data;
-            //         pa = (int16_t *)queue[index]->data;
-            //         memcpy(cache, pa, sizeof(int16_t) * AUDIO_BLOCK_SAMPLES);
-            //     }
-            // }
-            
-            transmit(fadeBlock);
-            release(fadeBlock);
-            
-            head = (head < (length - 1)) ? head + 1 : 0;
             break;
     }
 #elif defined(KINETISL)
@@ -245,6 +124,8 @@ void AudioEffectStutter::snap()
     
     offset = position;
     state = 1;
+    
+    Gain = 1.0f;
 }
 
 bool AudioEffectStutter::latch()
@@ -278,15 +159,6 @@ bool AudioEffectStutter::latch()
         *pa-- = sample / 2;
         
         pa = (int16_t *)(block->data);
-        
-        // Serial.print(*pa); Serial.print(" : ");
-        // Serial.print(*(pa+1)); Serial.print(" : ");
-        // Serial.print(*(pa+2)); Serial.print(" : ");
-        // Serial.print(*(pa+3)); Serial.print(" : ");
-        // Serial.print(*(pa+4)); Serial.print(" : ");
-        // Serial.print(*(pa+5)); Serial.print(" : ");
-        // Serial.print(*(pa+6)); Serial.print(" : ");
-        // Serial.println(*(pa+7));
     }
     
     
@@ -302,7 +174,7 @@ bool AudioEffectStutter::latch()
 void AudioEffectStutter::dub()
 {
 	__disable_irq();
-    if (state > 0) { state = 3; } else { __enable_irq(); return; }
+    if (state > 1) { state = 3; } else { __enable_irq(); return; }
     
     Serial.println("Dub");
     
@@ -313,8 +185,19 @@ void AudioEffectStutter::unlatch()
 {
     if (!state) { return; }
     
-    
     Serial.println("Unlatch");
+    
+    if (state != 2) {        
+        state = 2;
+    }
+    
+}
+
+void AudioEffectStutter::drop()
+{
+    if (!state) { return; }
+    
+    Serial.println("Drop");
     
     offset = 0;
     head = 0;
@@ -336,3 +219,6 @@ void AudioEffectStutter::setBlend(float Blend)
     RecordBlend = Blend;
     __enable_irq();
 }
+
+void AudioEffectStutter::setDecay(float Decay) { this->Decay = Decay; }
+float AudioEffectStutter::getGain() { return this->Gain; }

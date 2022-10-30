@@ -207,8 +207,8 @@ void loop() {
         
         // Update EQ
         if (millis() - last > 50) {
-            biquad1.setPeaking(0, 6000 - vPot[0] * 350, -vPot[2] * 2, 2);
-            biquad1.setPeaking(1, 4000 - vPot[1] * 150, -vPot[3] * 2, 6);
+            biquad1.setPeaking(0, 6000 - vPot[0] * 350, -vPot[2] * 2, 1);
+            biquad1.setPeaking(1, 4000 - vPot[1] * 150, -vPot[3] * 2, 4);
             last = millis();
         }
         
@@ -267,11 +267,8 @@ void loop() {
         LoopLength = (1.0f - vPotNorm[3]) * 1280 + LOOPLENGTH_MIN;
         
         // Crossfade length
-        
-            
         FadeLength = vPotNorm[0] / 4.0f + 1;
         RecordBlend = 1.0f - vPotNorm[0];
-        // Serial.println(FadeLength);
         
         
         switch (LoopMode) {
@@ -329,6 +326,13 @@ void loop() {
                     MomentarySnapped = false;
                     stutter.latch(); LED.SetRGB(0.25f, 0.25f, 0.0f);
                 }
+                
+                
+                if ((LoopMode >= 2) && SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
+                {
+                    stutter.unlatch(); LED.Flush();
+                }
+                
                 if (stutter.isLatched() && (ms - SwitchTimer) >= MOMENTARY_FREEZE_TIMER) {
                     MomentarySnapped = false;
                     if (LoopMode == 3) {// != 3
@@ -336,12 +340,13 @@ void loop() {
                     //     stutter.unlatch(); LED.Flush();
                     // }
                     // else {
-                        if (digitalRead(PIN_SWITCH) == LOW)
-                        {
-                            FreezeBlinking = false;
-                            stutter.unlatch();
-                            LED.Flush();
-                        }
+                    
+                        // if (digitalRead(PIN_SWITCH) == LOW)
+                        // {
+                        //     FreezeBlinking = false;
+                        //     stutter.unlatch();
+                        //     LED.Flush();
+                        // }
                     } else {
                         
                         if (!FreezeBlinking) // start blinking routine
@@ -365,28 +370,45 @@ void loop() {
                 
                 if (btn.fallingEdge())
                 {
-                    if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
+                    SwitchPressed = true;
+                    
+                    SwitchTimer = ms;
+                    if (LoopMode == 1) { stutter.unlatch(); }
                     if (!MomentarySnapped) {
-                        if (stutter.isLatched()) { stutter.dub(); 
-                        LED.SetRGB(0.125f, 0.25f, 0.25f); } else { stutter.snap(); }
+                        if (stutter.isLatched()) {
+                            stutter.dub(); 
+                            LED.SetRGB(0.125f, 0.25f, 0.25f);
+                        } else {
+                            stutter.snap();
+                        }
                             
                         LED.SetRGB(0.25f, 0.0f, 0.25f);
                         MomentarySnapped = true;
-                        SwitchTimer = ms;
                     } else {
                         MomentarySnapped = false;
-                        if (stutter.isLatched()) { stutter.dub(); 
-                        LED.SetRGB(0.125f, 0.25f, 0.25f); } else { stutter.snap(); }
-                        LED.Flush();
+                        
+                        if (stutter.isLatched()) {
+                            stutter.dub(); 
+                            LED.SetRGB(0.125f, 0.25f, 0.25f);
+                        } else {
+                            stutter.snap();
+                        }
                     }
                     
                 } else if (btn.risingEdge()) {
-                    if (((ms - SwitchTimer) < MOMENTARY_FREEZE_TIMER) && (LoopMode != 3))
+                    
+                    SwitchPressed = false;
+                    
+                    if (((ms - SwitchTimer) < MOMENTARY_FREEZE_TIMER) && (LoopMode == 1))
                     {
                         MomentarySnapped = false;
-                        if ((LoopMode == 1) || (LoopMode == 3)) { stutter.unlatch(); }
-                        if (stutter.isLatched()) { stutter.dub(); 
-                        LED.SetRGB(0.125f, 0.25f, 0.25f);} else { stutter.snap(); }
+                        if (LoopMode == 1) { stutter.unlatch(); }
+                        if (stutter.isLatched()) {
+                            stutter.dub();
+                            LED.SetRGB(0.125f, 0.25f, 0.25f);
+                        } else {
+                            stutter.snap();
+                        }
                         LED.Flush();
                     }
                 }
@@ -396,13 +418,12 @@ void loop() {
         
         
         // Adjust dry/wet blend
-        if (ms - last > 50) {
+        if (ms - last > 20) {
             stutter.setFade(FadeLength / 256.0f);
             stutter.setBlend(RecordBlend);
             
             mixer_poststutter.gain(0, Blend <= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
             mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
-            
             
             last = millis();
             // Check pot values for crossfades, momentary/latch mode, dry/wet blend etc.
@@ -432,7 +453,7 @@ void loop() {
     
     
     
-    // Monitor clipping
+    // Monitor input clipping
     if (peak_L.available()) {
         if (peak_L.read() > 0.999) {
             ClippingTimer = millis();
