@@ -44,6 +44,18 @@ const int PIN_POT[4] = {15, 16, 17, 22};
 #define ANALOG_SHIFT (-0.000f)
 #define ANALOG_SNAP_THRESHOLD 0.002f
 
+#define EQ_PEAK1_FREQ 6000
+#define EQ_PEAK2_FREQ 4000
+
+#define EQ_PEAK1_FREQ_SCALE 350
+#define EQ_PEAK2_FREQ_SCALE 150
+
+#define EQ_PEAK1_GAINSCALE 2
+#define EQ_PEAK2_GAINSCALE 2
+
+#define EQ_PEAK1_Q 2
+#define EQ_PEAK2_Q 6
+
 #define SWITCH_DEB_TIME 50
 
 #endif

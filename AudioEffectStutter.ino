@@ -41,12 +41,7 @@ AudioConnection                     patchCord11(mixer_poststutter, 0, audioOutpu
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 
 
-FilterTwoPole* filtPot = new FilterTwoPole[4];
-
-// FilterOnePole LP1_Pot1(LOWPASS, ANALOG_FILTER_FREQ);
-// FilterOnePole LP1_Pot2(LOWPASS, ANALOG_FILTER_FREQ);
-// FilterOnePole LP1_Pot3(LOWPASS, ANALOG_FILTER_FREQ);
-// FilterOnePole LP1_Pot4(LOWPASS, ANALOG_FILTER_FREQ);
+FilterTwoPole* filtPot = new FilterTwoPole[2];
 
 Bounce btn = Bounce(PIN_SWITCH, SWITCH_DEB_TIME);
 
@@ -80,7 +75,7 @@ int Blend, LoopLength, FadeLength;
 
 void setup()
 {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 2; i++) {
         filtPot[i].setAsFilter(LOWPASS_BUTTERWORTH, ANALOG_FILTER_FREQ);
     }
     
@@ -109,6 +104,7 @@ void setup()
     Freq2 = (EEPROM.read(EEPROM_FREQ2) - EEPROM_FREQ2_OFFSET) / EEPROM_FREQ2_SCALE;
     EqActive = EEPROM.read(EEPROM_EQSTATE);
     
+    // Init routine
     for (int i = 0; i < 8; i++) {
         LED.SetRGB(0.25f, 0.0f, 0.25f); delay(LED_BLINKTIME);
         LED.Flush(); delay(LED_BLINKTIME);
@@ -134,8 +130,8 @@ void setup()
     mixer_poststutter.gain(0, 1.0f);
     mixer_poststutter.gain(1, 1.0f);
     
-    biquad1.setPeaking(0, 6000 - Freq1 * 350, -Gain1 * 2, 2);
-    biquad1.setPeaking(1, 4000 - Freq2 * 150, -Gain2 * 2, 6);
+    biquad1.setPeaking(0, EQ_PEAK1_FREQ - Freq1 * EQ_PEAK1_FREQ_SCALE, -Gain1 * EQ_PEAK1_GAINSCALE, EQ_PEAK1_Q);
+    biquad1.setPeaking(1, EQ_PEAK2_FREQ - Freq2 * EQ_PEAK2_FREQ_SCALE, -Gain2 * EQ_PEAK2_GAINSCALE, EQ_PEAK2_Q);
     
     if (PedalMode == 1)
     {
@@ -177,7 +173,10 @@ void loop() {
         
         vPot[i] = vPotNorm[i] * ANALOG_GAIN_RECPR - ANALOG_OFFSET;
     }
-        
+    
+    
+    
+    // Update routine    
     btn.update();
     
     if (PedalMode == 1)
@@ -207,8 +206,8 @@ void loop() {
         
         // Update EQ
         if (millis() - last > 50) {
-            biquad1.setPeaking(0, 6000 - vPot[0] * 350, -vPot[2] * 2, 1);
-            biquad1.setPeaking(1, 4000 - vPot[1] * 150, -vPot[3] * 2, 4);
+            biquad1.setPeaking(0, EQ_PEAK1_FREQ - vPot[0] * EQ_PEAK1_FREQ_SCALE, -vPot[2] * EQ_PEAK1_GAINSCALE, EQ_PEAK1_Q);
+            biquad1.setPeaking(1, EQ_PEAK2_FREQ - vPot[1] * EQ_PEAK2_FREQ_SCALE, -vPot[3] * EQ_PEAK1_GAINSCALE, EQ_PEAK2_Q);
             last = millis();
         }
         
@@ -444,9 +443,9 @@ void loop() {
                 amp1.gain(PostEqGain);
                 sgtl5000_1.lineOutLevel(Level);
                 
-                // Serial.println("Adapting post EQ gain:");
-                // Serial.println(PostEqGain);
-                // Serial.println(Level);
+                Serial.println("Adapting post EQ gain:");
+                Serial.println(PostEqGain);
+                Serial.println(Level);
             }
         }
     }

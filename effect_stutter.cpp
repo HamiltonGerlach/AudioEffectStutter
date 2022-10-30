@@ -3,7 +3,6 @@
 
 void AudioEffectStutter::update(void)
 {
-#if defined(__ARM_ARCH_7EM__)
     audio_block_t *block, *fadeBlock;
     int16_t *pa, *cache, *pma;
     int16_t sample, s_cache;
@@ -105,12 +104,6 @@ void AudioEffectStutter::update(void)
             
             break;
     }
-#elif defined(KINETISL)
-    audio_block_t *block;
-
-    block = receiveReadOnly(0);
-    if (block) release(block);
-#endif
 }
 
 
@@ -118,26 +111,25 @@ void AudioEffectStutter::snap()
 {
     if (state == 1) { return; }
     
+    __disable_irq();
     Serial.println("Snap");
     
     FadeInDone = false;
-    
     offset = position;
     state = 1;
-    
     Gain = 1.0f;
+    __enable_irq();
 }
 
 bool AudioEffectStutter::latch()
 {
-	__disable_irq();
-
     int16_t *pa;
     int16_t sample;
     audio_block_t *block;
     
-    if (!state) { return false; }
-    if (position == offset) { return false; }
+	__disable_irq();
+    if (!state)             { __enable_irq(); return false; }
+    if (position == offset) { __enable_irq(); return false; }
     
     block = queue[recent];
     if (block) {
@@ -167,36 +159,39 @@ bool AudioEffectStutter::latch()
     head = 0;
     state = 2;
     
-    __enable_irq();
-    return true;
+    __enable_irq(); return true;
 }
 
 void AudioEffectStutter::dub()
 {
 	__disable_irq();
-    if (state > 1) { state = 3; } else { __enable_irq(); return; }
-    
-    Serial.println("Dub");
-    
+    if (state > 1) {
+        Serial.println("Dub");
+        
+        state = 3;
+    }
     __enable_irq();
 }
 
 void AudioEffectStutter::unlatch()
 {
-    if (!state) { return; }
-    
-    Serial.println("Unlatch");
-    
-    if (state != 2) {        
-        state = 2;
+	__disable_irq();
+    if (state)
+    {
+        Serial.println("Unlatch");
+        
+        if (state != 2) {        
+            state = 2;
+        }
     }
-    
+    __enable_irq();
 }
 
 void AudioEffectStutter::drop()
 {
     if (!state) { return; }
     
+	__disable_irq();
     Serial.println("Drop");
     
     offset = 0;
@@ -204,6 +199,7 @@ void AudioEffectStutter::drop()
     position = 0;
     length = 0;
     state = 0;
+    __enable_irq();
 }
 
 bool AudioEffectStutter::isActive()  { return (state > 0)   ? true : false; }
@@ -211,7 +207,12 @@ bool AudioEffectStutter::isSnapped() { return (state == 1)  ? true : false; }
 bool AudioEffectStutter::isLatched() { return (state >= 2)  ? true : false; }
 bool AudioEffectStutter::isDubbing() { return (state == 3)  ? true : false; }
 
-void AudioEffectStutter::setFade(float Fade) { this->Fade = Fade; }
+void AudioEffectStutter::setFade(float Fade)
+{
+    __disable_irq();
+    this->Fade = Fade;
+    __enable_irq();
+}
 
 void AudioEffectStutter::setBlend(float Blend)
 {
@@ -220,5 +221,16 @@ void AudioEffectStutter::setBlend(float Blend)
     __enable_irq();
 }
 
-void AudioEffectStutter::setDecay(float Decay) { this->Decay = Decay; }
-float AudioEffectStutter::getGain() { return this->Gain; }
+void AudioEffectStutter::setDecay(float Decay)
+{
+	__disable_irq();
+    this->Decay = Decay;
+    __enable_irq();
+}
+
+float AudioEffectStutter::getGain()
+{
+	__disable_irq();
+    return this->Gain;
+    __enable_irq();
+}
