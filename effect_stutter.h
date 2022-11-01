@@ -41,6 +41,7 @@ public:
     void setFade(float Fade); // set fade length - 0.0 (single sample declicking) to 1.0 (fading from half length)
     void setBlend(float Blend); // 1.0f = maximum record volume, 0.0f = no record volume
     void setDecay(float Decay);
+    void setAttack(float Attack);
     float getGain();
 private:
 	audio_block_t *inputQueueArray[1];
@@ -48,8 +49,10 @@ private:
     uint16_t position = 0, offset = 0, head = 0, length = 0; // 0 ... STUTTER_QUEUE_SIZE
     int state = 0, recent = 0; // 0 ... passthrough, 1 ... snap, 2 ... latch
     float Fade, RecordBlend = 1.0f;
-    float Decay = 0.1f;
+    float Decay = 0.7f;
+    float Attack = 1.0f;
     float Gain = 1.0f;
+    bool Direction = false; // false = attack, true = decay;
     bool FadeInDone = false;
     bool FadeOutDone = false;
 };

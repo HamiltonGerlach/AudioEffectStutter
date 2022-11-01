@@ -67,3 +67,164 @@ break;
 // Serial.print(*(pa+6)); Serial.print(" : ");
 // Serial.println(*(pa+7));
 // 
+
+
+
+
+
+
+
+
+
+
+case 0: // Latch mode
+    
+    if (SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
+    {
+        stutter.unlatch(); LED.Flush();
+    }
+    
+    // Stutter / Looper control
+    if (btn.fallingEdge())
+    {
+        SwitchPressed = true;
+        SwitchTimer = ms;
+        
+        if (!stutter.isActive()) {
+            stutter.snap();
+            LED.SetRGB(0.0f, 0.25f, 0.0f);
+            
+            if (Retrigger) { LED.SetR(0.125f); }
+        } else {
+            if (stutter.isLatched() && !Retrigger) { 
+                stutter.dub();
+                LED.SetRGB(0.125f, 0.25f, 0.25f);
+            }
+            else {
+                stutter.unlatch(); LED.Flush();
+            
+                if (Retrigger) {
+                    stutter.snap();
+                    LED.SetRGB(0.125f, 0.25f, 0.0f);
+                }
+            }
+        }
+    }
+    else if (btn.risingEdge())
+    {
+        SwitchPressed = false;
+        
+        if (stutter.isActive()) {
+            stutter.latch(); LED.SetRGB(0.0f, 0.0f, 0.25f);
+            if (Retrigger) { LED.SetR(0.125f); }
+        }
+    }
+    
+    break;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    case 1: // Momentary mode, heads locked
+    case 2: // Momentary mode, heads unlocked
+    case 3: // Momentary mode, short tap loops
+        
+    
+        if (MomentarySnapped && ((ms - SwitchTimer) > LoopLength)) {
+            MomentarySnapped = false;
+            stutter.latch(); LED.SetRGB(0.25f, 0.25f, 0.0f);
+        }
+        
+        
+        if ((LoopMode >= 2) && SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
+        {
+            stutter.unlatch(); LED.Flush();
+        }
+        
+        if (stutter.isLatched() && (ms - SwitchTimer) >= MOMENTARY_FREEZE_TIMER) {
+            MomentarySnapped = false;
+            if (LoopMode == 3) {// != 3
+            // {
+            //     stutter.unlatch(); LED.Flush();
+            // }
+            // else {
+            
+                // if (digitalRead(PIN_SWITCH) == LOW)
+                // {
+                //     FreezeBlinking = false;
+                //     stutter.unlatch();
+                //     LED.Flush();
+                // }
+            } else {
+                
+                if (!FreezeBlinking) // start blinking routine
+                {
+                    FreezeBlinking = true;
+                    FreezeBlinkTimer = ms;
+                    LED.SetRGB(0.125f, 0.125f, 0.125f);
+                }
+                else {
+                    int BlinkPhase = (ms - FreezeBlinkTimer) % 200;
+                    if (BlinkPhase < 100) {
+                        LED.SetRGB(0.125f, 0.125f, 0.125f);
+                    }
+                    else
+                    {
+                        LED.Flush();
+                    }
+                }
+            }
+        }
+        
+        if (btn.fallingEdge())
+        {
+            SwitchPressed = true;
+            
+            SwitchTimer = ms;
+            if (LoopMode == 1) { stutter.unlatch(); }
+            if (!MomentarySnapped) {
+                if (stutter.isLatched()) {
+                    stutter.dub(); 
+                    LED.SetRGB(0.125f, 0.25f, 0.25f);
+                } else {
+                    stutter.snap();
+                }
+                    
+                LED.SetRGB(0.25f, 0.0f, 0.25f);
+                MomentarySnapped = true;
+            } else {
+                MomentarySnapped = false;
+                
+                if (stutter.isLatched()) {
+                    stutter.dub(); 
+                    LED.SetRGB(0.125f, 0.25f, 0.25f);
+                } else {
+                    stutter.snap();
+                }
+            }
+            
+        } else if (btn.risingEdge()) {
+            
+            SwitchPressed = false;
+            
+            if (((ms - SwitchTimer) < MOMENTARY_FREEZE_TIMER) && (LoopMode == 1))
+            {
+                MomentarySnapped = false;
+                if (LoopMode == 1) { stutter.unlatch(); }
+                if (stutter.isLatched()) {
+                    stutter.dub();
+                    LED.SetRGB(0.125f, 0.25f, 0.25f);
+                } else {
+                    stutter.snap();
+                }
+                LED.Flush();
+            }
+        }
+        
+        break;

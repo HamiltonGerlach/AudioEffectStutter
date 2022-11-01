@@ -41,7 +41,7 @@ AudioConnection                     patchCord11(mixer_poststutter, 0, audioOutpu
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 
 
-FilterTwoPole* filtPot = new FilterTwoPole[2];
+FilterTwoPole* filtPot = new FilterTwoPole[4];
 
 Bounce btn = Bounce(PIN_SWITCH, SWITCH_DEB_TIME);
 
@@ -64,7 +64,9 @@ int LoopMode = 0; // 0 ... Latch, 1 ... Momentary, 2 ... Chaotic?
 
 bool State = true, MomentarySnapped = false, Retrigger = false;
 int Level = 16;
-float PostEqGain = 1.0, RecordBlend = 1.0;
+float PostEqGain = 1.0f, RecordBlend = 1.0f;
+float FadeInLength = 1.0f, FadeOutLength = 1.0f;
+float Attack, Decay;
 
 byte Freq1, Freq2;
 byte Gain1, Gain2;
@@ -75,7 +77,7 @@ int Blend, LoopLength, FadeLength;
 
 void setup()
 {
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 4; i++) {
         filtPot[i].setAsFilter(LOWPASS_BUTTERWORTH, ANALOG_FILTER_FREQ);
     }
     
@@ -175,7 +177,6 @@ void loop() {
     }
     
     
-    
     // Update routine    
     btn.update();
     
@@ -243,186 +244,109 @@ void loop() {
     {
         ms = millis();
         
-        // Loop mode selection update
-        if (vPot[1] <= -8) {
-            LoopMode = 3;
+                
+        FadeOutLength = (1.0f - vPotNorm[0]) * 1280 + LOOPLENGTH_MIN;
+        FadeInLength = (1.0f - vPotNorm[1]) * 1280 + LOOPLENGTH_MIN;
+        
+        
+        Attack = (1.0f - vPotNorm[1]);
+        if (Attack < 0.1f) { Attack = 0.1f; }
+        Decay = (1.0f - vPotNorm[0]);
+        if (Decay > 0.99f) { Decay = 1.0f; }
+        
+        Blend = vPot[2];        
+        RecordBlend = 1.0f - vPotNorm[3];
+        
+        
+        stutter.setAttack(Attack);
+        stutter.setDecay(Decay);
+                
+        if (SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
+        {
+            stutter.drop(); LED.Flush();
+            SwitchPressed = false;
         }
-        else if (vPot[1] > -8 && vPot[1] <= 0) {
-            LoopMode = 2;
-        }
-        else if (vPot[1] > 0 && vPot[1] <= 8) {
-            LoopMode = 1;
-        }
-        else {
-            LoopMode = 0;
-            MomentarySnapped = false;
-        }
         
-        // Blend update
-        Blend = vPot[2];
+        // if (SwitchPressed && ((ms - SwitchTimer) > LoopLength)) {
+        //     MomentarySnapped = false;
+        //     stutter.latch(); LED.SetRGB(0.25f, 0.25f, 0.0f);
+        // }
+        // 
+        // 
         
-        // Retrigger mode / loop length update
-        Retrigger = (vPot[3] <= 0) ? true : false;
-        LoopLength = (1.0f - vPotNorm[3]) * 1280 + LOOPLENGTH_MIN;
-        
-        // Crossfade length
-        FadeLength = vPotNorm[0] / 4.0f + 1;
-        RecordBlend = 1.0f - vPotNorm[0];
-        
-        
-        switch (LoopMode) {
-            case 0: // Latch mode
-                
-                if (SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
-                {
-                    stutter.unlatch(); LED.Flush();
-                }
-                
-                // Stutter / Looper control
-                if (btn.fallingEdge())
-                {
-                    SwitchPressed = true;
-                    SwitchTimer = ms;
-                    
-                    if (!stutter.isActive()) {
-                        stutter.snap();
-                        LED.SetRGB(0.0f, 0.25f, 0.0f);
-                        
-                        if (Retrigger) { LED.SetR(0.125f); }
-                    } else {
-                        if (stutter.isLatched() && !Retrigger) { 
-                            stutter.dub();
-                            LED.SetRGB(0.125f, 0.25f, 0.25f);
-                        }
-                        else {
-                            stutter.unlatch(); LED.Flush();
-                        
-                            if (Retrigger) {
-                                stutter.snap();
-                                LED.SetRGB(0.125f, 0.25f, 0.0f);
-                            }
-                        }
-                    }
-                }
-                else if (btn.risingEdge())
-                {
-                    SwitchPressed = false;
-                    
-                    if (stutter.isActive()) {
-                        stutter.latch(); LED.SetRGB(0.0f, 0.0f, 0.25f);
-                        if (Retrigger) { LED.SetR(0.125f); }
-                    }
-                }
-                
-                break;
-                
-            case 1: // Momentary mode, heads locked
-            case 2: // Momentary mode, heads unlocked
-            case 3: // Momentary mode, short tap loops
-                
+        // Stutter / Looper control
+        if (btn.fallingEdge())
+        {
+            SwitchPressed = true;
+            SwitchTimer = ms;
             
-                if (MomentarySnapped && ((ms - SwitchTimer) > LoopLength)) {
-                    MomentarySnapped = false;
-                    stutter.latch(); LED.SetRGB(0.25f, 0.25f, 0.0f);
-                }
+            if (!stutter.isActive()) {
+                stutter.snap();
+                LED.SetRGB(0.0f, 0.25f, 0.0f);
                 
-                
-                if ((LoopMode >= 2) && SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
-                {
-                    stutter.unlatch(); LED.Flush();
-                }
-                
-                if (stutter.isLatched() && (ms - SwitchTimer) >= MOMENTARY_FREEZE_TIMER) {
-                    MomentarySnapped = false;
-                    if (LoopMode == 3) {// != 3
-                    // {
-                    //     stutter.unlatch(); LED.Flush();
+                // if (Retrigger) { LED.SetR(0.125f); }
+            } else {
+                // if (stutter.isLatched()) { 
+                //     stutter.dub();
+                //     LED.SetRGB(0.125f, 0.25f, 0.25f);
+                // }
+                // else {
+                stutter.drop(); LED.Flush();
+                stutter.snap();
+                // }
+                // else
+                // {
+                //     stutter.unlatch();
+                // }
+                    
+                    // if (Retrigger) {
+                    //     stutter.snap();
+                    //     LED.SetRGB(0.125f, 0.25f, 0.0f);
                     // }
-                    // else {
-                    
-                        // if (digitalRead(PIN_SWITCH) == LOW)
-                        // {
-                        //     FreezeBlinking = false;
-                        //     stutter.unlatch();
-                        //     LED.Flush();
-                        // }
-                    } else {
-                        
-                        if (!FreezeBlinking) // start blinking routine
-                        {
-                            FreezeBlinking = true;
-                            FreezeBlinkTimer = ms;
-                            LED.SetRGB(0.125f, 0.125f, 0.125f);
-                        }
-                        else {
-                            int BlinkPhase = (ms - FreezeBlinkTimer) % 200;
-                            if (BlinkPhase < 100) {
-                                LED.SetRGB(0.125f, 0.125f, 0.125f);
-                            }
-                            else
-                            {
-                                LED.Flush();
-                            }
-                        }
-                    }
-                }
-                
-                if (btn.fallingEdge())
-                {
-                    SwitchPressed = true;
-                    
-                    SwitchTimer = ms;
-                    if (LoopMode == 1) { stutter.unlatch(); }
-                    if (!MomentarySnapped) {
-                        if (stutter.isLatched()) {
-                            stutter.dub(); 
-                            LED.SetRGB(0.125f, 0.25f, 0.25f);
-                        } else {
-                            stutter.snap();
-                        }
-                            
-                        LED.SetRGB(0.25f, 0.0f, 0.25f);
-                        MomentarySnapped = true;
-                    } else {
-                        MomentarySnapped = false;
-                        
-                        if (stutter.isLatched()) {
-                            stutter.dub(); 
-                            LED.SetRGB(0.125f, 0.25f, 0.25f);
-                        } else {
-                            stutter.snap();
-                        }
-                    }
-                    
-                } else if (btn.risingEdge()) {
-                    
-                    SwitchPressed = false;
-                    
-                    if (((ms - SwitchTimer) < MOMENTARY_FREEZE_TIMER) && (LoopMode == 1))
-                    {
-                        MomentarySnapped = false;
-                        if (LoopMode == 1) { stutter.unlatch(); }
-                        if (stutter.isLatched()) {
-                            stutter.dub();
-                            LED.SetRGB(0.125f, 0.25f, 0.25f);
-                        } else {
-                            stutter.snap();
-                        }
-                        LED.Flush();
-                    }
-                }
-                
-                break;
+                // }
+            }
         }
+        else if (btn.risingEdge())
+        {
+            SwitchPressed = false;
+            
+            // if (stutter.isActive()) {
+            stutter.unlatch(); LED.Flush();
+                
+                // LED.SetRGB(0.0f, 0.0f, 0.25f);
+                // if (Retrigger) { LED.SetR(0.125f); }
+            // }
+        }
+        
         
         
         // Adjust dry/wet blend
         if (ms - last > 20) {
-            stutter.setFade(FadeLength / 256.0f);
+            // stutter.setFade(FadeLength / 256.0f);
             stutter.setBlend(RecordBlend);
             
-            mixer_poststutter.gain(0, Blend <= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
-            mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : 1.0f - (abs(Blend) / 16.0f));
+            mixer_poststutter.gain(0, Blend <= 0 ? 1.0f * stutter.getGain() : stutter.getGain() * (1.0f - (abs(Blend) / 16.0f)));
+            
+            if (!stutter.isLatched() || !stutter.isActive())
+            {
+                mixer_poststutter.gain(1, 1.0f);
+            }
+            else
+            {
+                
+                float gainCalc = (1.0f - stutter.getGain()) + (1.0f - (abs(Blend) / 16.0f));
+                
+                Serial.print(gainCalc);
+                Serial.print("    ");
+                Serial.print(Blend);
+                Serial.print("    ");
+                Serial.print(stutter.getGain());
+                Serial.println("");
+                //
+                
+                mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
+            }
+                
             
             last = millis();
             // Check pot values for crossfades, momentary/latch mode, dry/wet blend etc.
@@ -432,23 +356,23 @@ void loop() {
     
     
     // Monitor post EQ clipping
-    if (EqActive == true)
-    {
-        if (peak1.available())
-        {
-            if (peak1.read() > 0.999)
-            {
-                PostEqGain -= 0.1; Level += 1;
-
-                amp1.gain(PostEqGain);
-                sgtl5000_1.lineOutLevel(Level);
-                
-                Serial.println("Adapting post EQ gain:");
-                Serial.println(PostEqGain);
-                Serial.println(Level);
-            }
-        }
-    }
+    // if (EqActive == true)
+    // {
+    //     if (peak1.available())
+    //     {
+    //         if (peak1.read() > 0.999)
+    //         {
+    //             PostEqGain -= 0.1; Level += 1;
+    // 
+    //             amp1.gain(PostEqGain);
+    //             sgtl5000_1.lineOutLevel(Level);
+    // 
+    //             Serial.println("Adapting post EQ gain:");
+    //             Serial.println(PostEqGain);
+    //             Serial.println(Level);
+    //         }
+    //     }
+    // }
     
     
     

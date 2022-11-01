@@ -25,12 +25,15 @@ void AudioEffectStutter::update(void)
                 cache = (int16_t *)queue[position]->data;
                 pa = (int16_t *)(block->data);
                 
+                transmit(queue[position]);
+                
                 for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
                     sample = *pa;
                     s_cache = *cache;
                     *pa = (int16_t)(min(max((int32_t)(sample * (RecordBlend + 1.0f) / 2.0f + s_cache * (1.0f - RecordBlend)) * 1.0f, -32768), 32767));
                     pa++; cache++;
                 }
+                
                 
                 release(queue[position]);
             }
@@ -74,33 +77,31 @@ void AudioEffectStutter::update(void)
             head = (head < (length - 1)) ? head + 1 : 0;
             
             if (head == 0) {
-                this->Gain -= this->Decay;
-                if (this->Gain <= 0.0f) { this->drop(); }
-            }
-            
-            break;
-            
-        case 3:
-            // Dubbing mode: loop recorded blocks while dubbing (recording) over
-            index = (head + offset) % STUTTER_QUEUE_END;
-                        
-            if (queue[index]) {
-                pa = (int16_t *)queue[index]->data;
-                cache = (int16_t *)(block->data);
-                                
-                transmit(queue[index]);
-                
-                for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
-                    sample = *pa;
-                    s_cache = *cache;
-                    *pa = (int16_t)(min(max((int32_t)(sample * (RecordBlend) + s_cache * (1.0f - RecordBlend)) * 1.0f, -32768), 32767));
-                    pa++; cache++;
+                if (this->Gain != 1.0f)
+                {
+                    if (this->Direction) // Decay
+                    {
+                        if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
+                        if (this->Gain <= 0.01f) { this->drop(); }
+                    }
+                    else
+                    {
+                        if (this->Attack != 1.0f) { this->Gain += this->Attack; }
+                        if (this->Gain >= 1.0f) { this->Direction = true; }
+                    }
+                }
+                else
+                {
+                    if (!this->Direction) { this->Direction = true; }
+                    if (this->Direction)
+                    {
+                        if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
+                        if (this->Gain <= 0.01f) { this->drop(); }
+                    }
                 }
                 
+                if (this->Gain > 1.0f) { this->Gain = 1.0f; }
             }
-            head = (head < (length - 1)) ? head + 1 : 0;
-            
-            release(block);
             
             break;
     }
@@ -117,7 +118,10 @@ void AudioEffectStutter::snap()
     FadeInDone = false;
     offset = position;
     state = 1;
-    Gain = 1.0f;
+    
+    Gain = Attack;
+    
+    Direction = false;
     __enable_irq();
 }
 
@@ -127,10 +131,12 @@ bool AudioEffectStutter::latch()
     int16_t sample;
     audio_block_t *block;
     
-	__disable_irq();
-    if (!state)             { __enable_irq(); return false; }
-    if (position == offset) { __enable_irq(); return false; }
+    Serial.println("Latch");
     
+    if (!state)             { return false; }
+    if (position == offset) { return false; }
+    
+	__disable_irq();
     block = queue[recent];
     if (block) {
         pa = (int16_t *)(block->data);
@@ -154,8 +160,7 @@ bool AudioEffectStutter::latch()
     }
     
     
-    Serial.println("Latch");
-    
+    Direction = false;
     head = 0;
     state = 2;
     
@@ -164,9 +169,10 @@ bool AudioEffectStutter::latch()
 
 void AudioEffectStutter::dub()
 {
+    Serial.println("Dub");
+    
 	__disable_irq();
     if (state > 1) {
-        Serial.println("Dub");
         
         state = 3;
     }
@@ -174,16 +180,50 @@ void AudioEffectStutter::dub()
 }
 
 void AudioEffectStutter::unlatch()
-{
+{    
+    int16_t *pa;
+    int16_t sample;
+    audio_block_t *block;
+    
+    Serial.println("Unlatch");
+    
+    if (position == offset) { return false; }
+    
 	__disable_irq();
     if (state)
     {
-        Serial.println("Unlatch");
-        
         if (state != 2) {        
             state = 2;
         }
+        
+        
+        
+        //
+        block = queue[recent];
+        if (block) {
+            pa = (int16_t *)(block->data);
+            
+            pa = (int16_t *)(block->data + 7);
+            *pa-- = 0;
+            sample = *pa;
+            *pa-- = sample / 1024;
+            sample = *pa;
+            *pa-- = sample / 256;
+            sample = *pa;
+            *pa-- = sample / 64;
+            sample = *pa;
+            *pa-- = sample / 16;
+            sample = *pa;
+            *pa-- = sample / 8;
+            sample = *pa;
+            *pa-- = sample / 2;
+            
+            pa = (int16_t *)(block->data);
+        }
+        
+        //
     }
+    Direction = false;
     __enable_irq();
 }
 
@@ -191,9 +231,11 @@ void AudioEffectStutter::drop()
 {
     if (!state) { return; }
     
-	__disable_irq();
     Serial.println("Drop");
     
+	__disable_irq();
+    
+    Gain = 0.0f;
     offset = 0;
     head = 0;
     position = 0;
@@ -225,6 +267,13 @@ void AudioEffectStutter::setDecay(float Decay)
 {
 	__disable_irq();
     this->Decay = Decay;
+    __enable_irq();
+}
+
+void AudioEffectStutter::setAttack(float Attack)
+{
+	__disable_irq();
+    this->Attack = Attack;
     __enable_irq();
 }
 
