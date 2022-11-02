@@ -133,7 +133,7 @@ void setup()
     mixer_poststutter.gain(1, 1.0f);
     
     biquad1.setPeaking(0, EQ_PEAK1_FREQ - Freq1 * EQ_PEAK1_FREQ_SCALE, -Gain1 * EQ_PEAK1_GAINSCALE, EQ_PEAK1_Q);
-    biquad1.setPeaking(1, EQ_PEAK2_FREQ - Freq2 * EQ_PEAK2_FREQ_SCALE, -Gain2 * EQ_PEAK2_GAINSCALE, EQ_PEAK2_Q);
+    biquad1.setHighShelf(1, EQ_PEAK2_FREQ - Freq2 * EQ_PEAK2_FREQ_SCALE, -Gain2 * EQ_PEAK2_GAINSCALE - 5.0f, EQ_PEAK2_Q);
     
     if (PedalMode == 1)
     {
@@ -191,7 +191,7 @@ void loop() {
                 mixer_posteq.gain(1, 1.0f);
                 
                 EqActive = 1;
-                LED.SetRGB(0.125f, 0.05f, 0.0f);
+                LED.SetRGB(0.125f, 0.00f, 0.01f);
             }
             else
             {
@@ -203,12 +203,12 @@ void loop() {
             }
         }
         
-        
+        // Serial.println(vPot[3]);
         
         // Update EQ
         if (millis() - last > 50) {
             biquad1.setPeaking(0, EQ_PEAK1_FREQ - vPot[0] * EQ_PEAK1_FREQ_SCALE, -vPot[2] * EQ_PEAK1_GAINSCALE, EQ_PEAK1_Q);
-            biquad1.setPeaking(1, EQ_PEAK2_FREQ - vPot[1] * EQ_PEAK2_FREQ_SCALE, -vPot[3] * EQ_PEAK1_GAINSCALE, EQ_PEAK2_Q);
+            biquad1.setHighShelf(1, EQ_PEAK2_FREQ - vPot[1] * EQ_PEAK2_FREQ_SCALE, -vPot[3] * EQ_PEAK1_GAINSCALE - 5.0f, EQ_PEAK2_Q);
             last = millis();
         }
         
@@ -274,6 +274,12 @@ void loop() {
         // 
         // 
         
+        if (stutter.isLatched()) {
+            LED.SetRGB(0.0f, 0.0f, 0.25f);
+        }
+        
+        
+        
         // Stutter / Looper control
         if (btn.fallingEdge())
         {
@@ -282,7 +288,7 @@ void loop() {
             
             if (!stutter.isActive()) {
                 stutter.snap();
-                LED.SetRGB(0.0f, 0.25f, 0.0f);
+                LED.SetRGB(0.0f, 0.1f, 0.0f);
                 
                 // if (Retrigger) { LED.SetR(0.125f); }
             } else {
@@ -292,7 +298,7 @@ void loop() {
                 // }
                 // else {
                 stutter.drop(); LED.Flush();
-                stutter.snap();
+                stutter.snap(); LED.SetRGB(0.0f, 0.1f, 0.0f);
                 // }
                 // else
                 // {
@@ -318,6 +324,9 @@ void loop() {
             // }
         }
         
+        if (!stutter.isActive()) {
+            LED.Flush();
+        }
         
         
         // Adjust dry/wet blend
@@ -336,12 +345,12 @@ void loop() {
                 
                 float gainCalc = (1.0f - stutter.getGain()) + (1.0f - (abs(Blend) / 16.0f));
                 
-                Serial.print(gainCalc);
-                Serial.print("    ");
-                Serial.print(Blend);
-                Serial.print("    ");
-                Serial.print(stutter.getGain());
-                Serial.println("");
+                // Serial.print(gainCalc);
+                // Serial.print("    ");
+                // Serial.print(Blend);
+                // Serial.print("    ");
+                // Serial.print(stutter.getGain());
+                // Serial.println("");
                 //
                 
                 mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
@@ -356,23 +365,23 @@ void loop() {
     
     
     // Monitor post EQ clipping
-    // if (EqActive == true)
-    // {
-    //     if (peak1.available())
-    //     {
-    //         if (peak1.read() > 0.999)
-    //         {
-    //             PostEqGain -= 0.1; Level += 1;
-    // 
-    //             amp1.gain(PostEqGain);
-    //             sgtl5000_1.lineOutLevel(Level);
-    // 
-    //             Serial.println("Adapting post EQ gain:");
-    //             Serial.println(PostEqGain);
-    //             Serial.println(Level);
-    //         }
-    //     }
-    // }
+    if (EqActive == true)
+    {
+        if (peak1.available())
+        {
+            if (peak1.read() > 0.999)
+            {
+                PostEqGain -= 0.1; Level += 1;
+    
+                amp1.gain(PostEqGain);
+                sgtl5000_1.lineOutLevel(Level);
+    
+                Serial.println("Adapting post EQ gain:");
+                Serial.println(PostEqGain);
+                Serial.println(Level);
+            }
+        }
+    }
     
     
     
