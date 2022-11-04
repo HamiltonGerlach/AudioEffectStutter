@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "effect_stutter.h"
+#include "Log.h"
 
 void AudioEffectStutter::update(void)
 {
@@ -82,7 +83,7 @@ void AudioEffectStutter::update(void)
                     if (this->Direction) // Decay
                     {
                         if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
-                        if (this->Gain <= 0.01f) { this->drop(); }
+                        if (this->Gain <= 0.01f) { this->drop(); finished = true; }
                     }
                     else
                     {
@@ -96,7 +97,7 @@ void AudioEffectStutter::update(void)
                     if (this->Direction)
                     {
                         if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
-                        if (this->Gain <= 0.01f) { this->drop(); }
+                        if (this->Gain <= 0.01f) { this->drop(); finished = true; }
                     }
                 }
                 
@@ -113,7 +114,7 @@ void AudioEffectStutter::snap()
     if (state == 1) { return; }
     
     __disable_irq();
-    Serial.println("Snap");
+    DPRINTLN("Snap");
     
     FadeInDone = false;
     offset = position;
@@ -131,7 +132,7 @@ bool AudioEffectStutter::latch()
     int16_t sample;
     audio_block_t *block;
     
-    Serial.println("Latch");
+    DPRINTLN("Latch");
     
     if (!state)             { return false; }
     if (position == offset) { return false; }
@@ -169,7 +170,7 @@ bool AudioEffectStutter::latch()
 
 void AudioEffectStutter::dub()
 {
-    Serial.println("Dub");
+    DPRINTLN("Dub");
     
 	__disable_irq();
     if (state > 1) {
@@ -185,7 +186,7 @@ void AudioEffectStutter::unlatch()
     int16_t sample;
     audio_block_t *block;
     
-    Serial.println("Unlatch");
+    DPRINTLN("Unlatch");
     
     if (position == offset) { return false; }
     
@@ -231,7 +232,7 @@ void AudioEffectStutter::drop()
 {
     if (!state) { return; }
     
-    Serial.println("Drop");
+    DPRINTLN("Drop");
     
 	__disable_irq();
     
@@ -248,6 +249,14 @@ bool AudioEffectStutter::isActive()  { return (state > 0)   ? true : false; }
 bool AudioEffectStutter::isSnapped() { return (state == 1)  ? true : false; }
 bool AudioEffectStutter::isLatched() { return (state >= 2)  ? true : false; }
 bool AudioEffectStutter::isDubbing() { return (state == 3)  ? true : false; }
+bool AudioEffectStutter::isFinished() { return finished; }
+
+void AudioEffectStutter::resetFinished()
+{
+    __disable_irq();
+    finished = false;
+    __enable_irq();
+}
 
 void AudioEffectStutter::setFade(float Fade)
 {

@@ -7,7 +7,7 @@
 
 #if defined(__IMXRT1062__)
   // 4.00 second maximum on Teensy 4.0
-  #define STUTTER_QUEUE_SIZE  14300 // (176512 / AUDIO_BLOCK_SAMPLES)
+  #define STUTTER_QUEUE_SIZE  7150 //14300 // (176512 / AUDIO_BLOCK_SAMPLES)
 #elif defined(__MK66FX1M0__)
   // 2.41 second maximum on Teensy 3.6
   #define STUTTER_QUEUE_SIZE  (106496 / AUDIO_BLOCK_SAMPLES)
@@ -38,6 +38,8 @@ public:
     bool isSnapped(); // is snapped (listening)
     bool isLatched(); // is latched (looping)
     bool isDubbing(); // is dubbing
+    bool isFinished(); // has been dropped
+    void resetFinished(); // has been dropped
     void setFade(float Fade); // set fade length - 0.0 (single sample declicking) to 1.0 (fading from half length)
     void setBlend(float Blend); // 1.0f = maximum record volume, 0.0f = no record volume
     void setDecay(float Decay);
@@ -55,6 +57,7 @@ private:
     bool Direction = false; // false = attack, true = decay;
     bool FadeInDone = false;
     bool FadeOutDone = false;
+    bool finished = false;
 };
 
 #endif

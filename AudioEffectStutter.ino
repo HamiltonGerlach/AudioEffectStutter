@@ -11,32 +11,43 @@
 #include "AudioEffectStutter.h"
 #include "effect_stutter.h"
 #include "CtrlLED.h"
+#include "Log.h"
 
 AudioInputI2S                       audioInput;         //xy=471,791
 AudioAnalyzePeak                    peak_L;                 //xy=803,448
 AudioAnalyzePeak                    peak_R;                 //xy=818,503
-AudioAnalyzeRMS                     rms1;                     //xy=847,552
 AudioFilterBiquad                   biquad1;                //xy=886,745
 AudioAnalyzePeak                    peak1;                    //xy=1018,896
 AudioAmplifier                      amp1;                     //xy=1040,831
 AudioMixer4                         mixer_posteq;                 //xy=1069,668
 AudioMixer4                         mixer_poststutter;                 //xy=1069,668
+AudioMixer4                         mixer_poststutter_R;                 //xy=1069,668
 AudioOutputI2S                      audioOutput;        //xy=1305,745
+
 AudioEffectStutter                  stutter;
+AudioEffectStutter                  stutter_R;
 
 AudioConnection                     patchCord1(audioInput, 0, peak_L, 0);
-AudioConnection                     patchCord2(audioInput, 0, rms1, 0);
-AudioConnection                     patchCord3(audioInput, 0, biquad1, 0);
-AudioConnection                     patchCord4(audioInput, 0, mixer_posteq, 0);
 AudioConnection                     patchCord5(audioInput, 1, peak_R, 0);
-AudioConnection                     patchCord6(audioInput, 1, audioOutput, 1);
+
+
+AudioConnection                     patchCord3(audioInput, 0, biquad1, 0);
 AudioConnection                     patchCord7(biquad1, 0, amp1, 0);
 AudioConnection                     patchCord8(amp1, 0, peak1, 0);
+
+AudioConnection                     patchCord4(audioInput, 0, mixer_posteq, 0);
 AudioConnection                     patchCord9(amp1, 0, mixer_posteq, 1);
+
 AudioConnection                     patchCord10(mixer_posteq, 0, stutter, 0);
 AudioConnection                     patchCord10a(stutter, 0, mixer_poststutter, 0);
 AudioConnection                     patchCord10b(mixer_posteq, 0, mixer_poststutter, 1);
 AudioConnection                     patchCord11(mixer_poststutter, 0, audioOutput, 0);
+
+
+AudioConnection                     patchCord12a(audioInput, 1, stutter_R, 0);
+AudioConnection                     patchCord12ab(audioInput, 1, mixer_poststutter_R, 1);
+AudioConnection                     patchCord12b(stutter_R, 0, mixer_poststutter_R, 0);
+AudioConnection                     patchCord13(mixer_poststutter_R, 0, audioOutput, 1);
 
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 
@@ -132,6 +143,9 @@ void setup()
     mixer_poststutter.gain(0, 1.0f);
     mixer_poststutter.gain(1, 1.0f);
     
+    mixer_poststutter_R.gain(0, 1.0f);
+    mixer_poststutter_R.gain(1, 1.0f);
+    
     biquad1.setPeaking(0, EQ_PEAK1_FREQ - Freq1 * EQ_PEAK1_FREQ_SCALE, -Gain1 * EQ_PEAK1_GAINSCALE, EQ_PEAK1_Q);
     biquad1.setHighShelf(1, EQ_PEAK2_FREQ - Freq2 * EQ_PEAK2_FREQ_SCALE, -Gain2 * EQ_PEAK2_GAINSCALE - 5.0f, EQ_PEAK2_Q);
     
@@ -146,8 +160,9 @@ void setup()
         else                { LED.SetRGB(0.0f, 0.125f, 0.125f); }
     }
     
-    
+    #if DEBUG
     Serial.begin(9600);
+    #endif
 }
 
 
@@ -203,7 +218,7 @@ void loop() {
             }
         }
         
-        // Serial.println(vPot[3]);
+        // DPRINTLN(vPot[3]);
         
         // Update EQ
         if (millis() - last > 50) {
@@ -260,10 +275,13 @@ void loop() {
         
         stutter.setAttack(Attack);
         stutter.setDecay(Decay);
+            
+        stutter_R.setAttack(Attack);
+        stutter_R.setDecay(Decay);
                 
         if (SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
         {
-            stutter.drop(); LED.Flush();
+            stutter.drop(); stutter_R.drop(); LED.Flush();
             SwitchPressed = false;
         }
         
@@ -287,7 +305,7 @@ void loop() {
             SwitchTimer = ms;
             
             if (!stutter.isActive()) {
-                stutter.snap();
+                stutter.snap(); stutter_R.snap();
                 LED.SetRGB(0.0f, 0.1f, 0.0f);
                 
                 // if (Retrigger) { LED.SetR(0.125f); }
@@ -297,8 +315,8 @@ void loop() {
                 //     LED.SetRGB(0.125f, 0.25f, 0.25f);
                 // }
                 // else {
-                stutter.drop(); LED.Flush();
-                stutter.snap(); LED.SetRGB(0.0f, 0.1f, 0.0f);
+                stutter.drop(); stutter_R.drop(); LED.Flush();
+                stutter.snap(); stutter_R.snap(); LED.SetRGB(0.0f, 0.1f, 0.0f);
                 // }
                 // else
                 // {
@@ -317,43 +335,46 @@ void loop() {
             SwitchPressed = false;
             
             // if (stutter.isActive()) {
-            stutter.unlatch(); LED.Flush();
+            stutter.unlatch(); stutter_R.unlatch(); LED.Flush();
                 
                 // LED.SetRGB(0.0f, 0.0f, 0.25f);
                 // if (Retrigger) { LED.SetR(0.125f); }
             // }
         }
         
-        if (!stutter.isActive()) {
+        
+        
+        if (stutter.isFinished()) {
+            stutter.resetFinished();
             LED.Flush();
         }
+        if (stutter_R.isFinished()) {
+            stutter_R.resetFinished();
+            LED.Flush();
+        }
+        
         
         
         // Adjust dry/wet blend
         if (ms - last > 20) {
             // stutter.setFade(FadeLength / 256.0f);
-            stutter.setBlend(RecordBlend);
+            stutter.setBlend(RecordBlend); stutter_R.setBlend(RecordBlend);
             
             mixer_poststutter.gain(0, Blend <= 0 ? 1.0f * stutter.getGain() : stutter.getGain() * (1.0f - (abs(Blend) / 16.0f)));
+            mixer_poststutter_R.gain(0, Blend <= 0 ? 1.0f * stutter.getGain() : stutter.getGain() * (1.0f - (abs(Blend) / 16.0f)));
             
             if (!stutter.isLatched() || !stutter.isActive())
             {
                 mixer_poststutter.gain(1, 1.0f);
+                mixer_poststutter_R.gain(1, 1.0f);
             }
             else
             {
                 
                 float gainCalc = (1.0f - stutter.getGain()) + (1.0f - (abs(Blend) / 16.0f));
                 
-                // Serial.print(gainCalc);
-                // Serial.print("    ");
-                // Serial.print(Blend);
-                // Serial.print("    ");
-                // Serial.print(stutter.getGain());
-                // Serial.println("");
-                //
-                
                 mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
+                mixer_poststutter_R.gain(1, Blend >= 0 ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
             }
                 
             
@@ -376,9 +397,9 @@ void loop() {
                 amp1.gain(PostEqGain);
                 sgtl5000_1.lineOutLevel(Level);
     
-                Serial.println("Adapting post EQ gain:");
-                Serial.println(PostEqGain);
-                Serial.println(Level);
+                DPRINTLN("Adapting post EQ gain:");
+                DPRINTLN(PostEqGain);
+                DPRINTLN(Level);
             }
         }
     }
@@ -387,7 +408,14 @@ void loop() {
     
     // Monitor input clipping
     if (peak_L.available()) {
-        if (peak_L.read() > 0.999) {
+        if (peak_L.read() > 0.9999f) {
+            ClippingTimer = millis();
+            IsClipping = true;
+            LED.SetRGB(0.25f, 0.0f, 0.0f);
+        }
+    }// Monitor input clipping
+    if (peak_R.available()) {
+        if (peak_R.read() > 0.9999f) {
             ClippingTimer = millis();
             IsClipping = true;
             LED.SetRGB(0.25f, 0.0f, 0.0f);

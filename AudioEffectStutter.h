@@ -56,6 +56,6 @@ const int PIN_POT[4] = {15, 16, 17, 22};
 #define EQ_PEAK1_Q 2
 #define EQ_PEAK2_Q 1
 
-#define SWITCH_DEB_TIME 20
+#define SWITCH_DEB_TIME 35
 
 #endif
