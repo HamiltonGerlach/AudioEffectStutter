@@ -1,12 +1,25 @@
 #ifndef audioeffectstutter_h
 #define audioeffectstutter_h
 
-#define PIN_SWITCH 14
-#define PIN_POT1 15
-#define PIN_POT2 16
-#define PIN_POT3 17
-#define PIN_POT4 22
-const int PIN_POT[4] = {15, 16, 17, 22};
+#define PIN_TOGGLE 5
+#define PIN_SWITCH 9
+#define PIN_SWITCH_1 22
+#define PIN_SWITCH_2 9
+
+#define PIN_POT1 14
+#define PIN_POT2 15
+#define PIN_POT3 16
+#define PIN_POT4 17
+
+#define POT_MIXER 0
+#define POT_BLEND 3
+#define POT_ATTACK 2
+#define POT_DECAY 1
+
+// #define DEBUG_POT_VALUES 1
+
+const int PIN_POT[4] = {14, 15, 16, 17};
+
 
 #define EEPROM_GAIN1 0
 #define EEPROM_GAIN2 1
@@ -42,7 +55,7 @@ const int PIN_POT[4] = {15, 16, 17, 22};
 #define ANALOG_RESCALE 9.775171065498047e-4
 #define ANALOG_OFFSET 16.0f
 #define ANALOG_SHIFT (-0.000f)
-#define ANALOG_SNAP_THRESHOLD 0.02f
+#define ANALOG_SNAP_THRESHOLD 0.01f
 
 #define EQ_PEAK1_FREQ 6000
 #define EQ_PEAK2_FREQ 6000

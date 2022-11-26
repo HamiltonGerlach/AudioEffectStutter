@@ -7,7 +7,7 @@
 
 #if defined(__IMXRT1062__)
   // 4.00 second maximum on Teensy 4.0
-  #define STUTTER_QUEUE_SIZE  7150 //14300 // (176512 / AUDIO_BLOCK_SAMPLES)
+  #define STUTTER_QUEUE_SIZE  7100 //14300 // (176512 / AUDIO_BLOCK_SAMPLES)
 #elif defined(__MK66FX1M0__)
   // 2.41 second maximum on Teensy 3.6
   #define STUTTER_QUEUE_SIZE  (106496 / AUDIO_BLOCK_SAMPLES)

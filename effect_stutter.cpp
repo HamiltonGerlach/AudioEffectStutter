@@ -113,8 +113,9 @@ void AudioEffectStutter::snap()
 {
     if (state == 1) { return; }
     
-    __disable_irq();
     DPRINTLN("Snap");
+    
+    __disable_irq();
     
     FadeInDone = false;
     offset = position;
