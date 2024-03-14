@@ -26,7 +26,7 @@ void AudioEffectStutter::update(void)
                 cache = (int16_t *)queue[position]->data;
                 pa = (int16_t *)(block->data);
                 
-                transmit(queue[position]);
+                //transmit(queue[position]);
                 
                 for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
                     sample = *pa;
@@ -77,32 +77,32 @@ void AudioEffectStutter::update(void)
             
             head = (head < (length - 1)) ? head + 1 : 0;
             
-            if (head == 0) {
-                if (this->Gain != 1.0f)
-                {
-                    if (this->Direction) // Decay
-                    {
-                        if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
-                        if (this->Gain <= 0.01f) { this->drop(); finished = true; }
-                    }
-                    else
-                    {
-                        if (this->Attack != 1.0f) { this->Gain += this->Attack; }
-                        if (this->Gain >= 1.0f) { this->Direction = true; }
-                    }
-                }
-                else
-                {
-                    if (!this->Direction) { this->Direction = true; }
-                    if (this->Direction)
-                    {
-                        if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
-                        if (this->Gain <= 0.01f) { this->drop(); finished = true; }
-                    }
-                }
-                
-                if (this->Gain > 1.0f) { this->Gain = 1.0f; }
-            }
+            // if (head == 0) {
+            //     if (this->Gain != 1.0f)
+            //     {
+            //         if (this->Direction) // Decay
+            //         {
+            //             if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
+            //             if (this->Gain <= 0.01f) { this->drop(); finished = true; }
+            //         }
+            //         else
+            //         {
+            //             if (this->Attack != 1.0f) { this->Gain += this->Attack; }
+            //             if (this->Gain >= 1.0f) { this->Direction = true; }
+            //         }
+            //     }
+            //     else
+            //     {
+            //         if (!this->Direction) { this->Direction = true; }
+            //         if (this->Direction)
+            //         {
+            //             if (this->Decay != 1.0f) { this->Gain *= this->Decay; }
+            //             if (this->Gain <= 0.01f) { this->drop(); finished = true; }
+            //         }
+            //     }
+            // 
+            //     if (this->Gain > 1.0f) { this->Gain = 1.0f; }
+            // }
             
             break;
     }

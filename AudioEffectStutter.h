@@ -71,4 +71,8 @@ const int PIN_POT[4] = {14, 15, 16, 17};
 
 #define SWITCH_DEB_TIME 35
 
+#define TREM_FREQ_OFFSET 400
+#define TREM_FREQ_GAIN 15000
+#define TREM_FREQ_GAP 20
+
 #endif

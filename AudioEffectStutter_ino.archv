@@ -12,7 +12,6 @@
 #include "effect_stutter.h"
 #include "CtrlLED.h"
 #include "Log.h"
-#include "Ramp.h"
 
 AudioControlSGTL5000                sgtl5000_1;         //xy=620,538
 AudioInputI2S                       audioInput;         //xy=471,791
@@ -86,10 +85,7 @@ Bounce SwitchA = Bounce(PIN_SWITCH_1, SWITCH_DEB_TIME);
 Bounce SwitchB = Bounce(PIN_SWITCH_2, SWITCH_DEB_TIME);
 Bounce Toggle  = Bounce(PIN_TOGGLE, SWITCH_DEB_TIME);
 
-CtrlLED LED = CtrlLED();
 
-float PhaseMultiplier = 1.0f;
-float Value = 0.0f;
 CtrlLED LED = CtrlLED();
 
 bool IsClipping = false;
@@ -108,21 +104,17 @@ bool State = true, MomentarySnapped = false, Retrigger = false;
 int Level = 13;
 float PostEqGain = 1.0f, RecordBlend = 1.0f;
 float FadeInLength = 1.0f, FadeOutLength = 1.0f;
-float Attack = 1.0f, Decay = 1.0f;
+float Attack = 1.0f, Decay = 1.0f, Blend = 1.0f;
 float peakl, peakr, rmsfact = 1.0f, lll, rrr;
 
 byte Freq1, Freq2;
 byte Gain1, Gain2;
 bool EqActive, TremMode = 0, TremActive = 0;
 
-int Blend, LoopLength, FadeLength;
+int LoopLength, FadeLength;
 
-float Depth, Speed, Sense, SplitFreq, StutterVol;
+float Depth, Speed, Sense;
 
-bool IsRamping = false, SwitchBPressed = false;
-
-Ramp* Ramper = new Ramp(0.0f, 1.0f);
-Ramp* StutterRamper = new Ramp(0.0f, 10.0f);
 
 void setup()
 {
@@ -147,9 +139,17 @@ void setup()
     pinMode(PIN_LED_G, OUTPUT);
     pinMode(PIN_LED_B, OUTPUT);
     
-    analogWriteFrequency(PIN_LED_R, 50000);
-    analogWriteFrequency(PIN_LED_G, 50000);
-    analogWriteFrequency(PIN_LED_B, 50000);
+    analogWriteFrequency(PIN_LED_R, 45000);
+    analogWriteFrequency(PIN_LED_G, 45000);
+    analogWriteFrequency(PIN_LED_B, 45000);
+    
+    // pinMode(19, INPUT_PULLUP);
+    // pinMode(18, INPUT_PULLUP);
+    // pinMode(13, INPUT_PULLUP);
+    // pinMode(12, INPUT_PULLUP);
+    // pinMode(11, INPUT_PULLUP);
+    // pinMode(10, INPUT_PULLUP);
+    // pinMode(6, INPUT_PULLUP);
     
     Gain1 = (EEPROM.read(EEPROM_GAIN1) - EEPROM_GAIN1_OFFSET) / EEPROM_GAIN1_SCALE;
     Gain2 = (EEPROM.read(EEPROM_GAIN2) - EEPROM_GAIN2_OFFSET) / EEPROM_GAIN2_SCALE;
@@ -166,16 +166,18 @@ void setup()
     
     if (digitalRead(PIN_SWITCH_1) == LOW) { PedalMode = 1; }
     
-    if (digitalRead(PIN_TOGGLE) == LOW) {
+    if (digitalRead(PIN_TOGGLE) == LOW)
+    {
         TremMode = 1;
         
         mixer_trem_loop_L.gain(0, 0.0f);
-        mixer_trem_loop_L.gain(1, 1.25f);
+        mixer_trem_loop_L.gain(1, 1.5f);
         
         mixer_trem_loop_R.gain(0, 0.0f);
-        mixer_trem_loop_R.gain(1, 1.25f);
+        mixer_trem_loop_R.gain(1, 1.5f);
     }
-    else {
+    else
+    {
         TremMode = 0;
         
         mixer_trem_loop_L.gain(0, 1.0f);
@@ -188,11 +190,13 @@ void setup()
     amp1.gain(PostEqGain);
     
     // Bypass EQ
-    if (EqActive == 1) {
+    if (EqActive == 1)
+    {
         mixer_posteq.gain(0, 0.0f);
         mixer_posteq.gain(1, 1.0f);
     }
-    else {        
+    else
+    {        
         mixer_posteq.gain(0, 1.0f);
         mixer_posteq.gain(1, 0.0f);
     }
@@ -204,11 +208,11 @@ void setup()
     mixer_poststutter_R.gain(1, 1.0f);
     
     // Harmonic tremolo
-    split_low_L.setLowpass(0, 820.0f, 1.0f);
-    split_high_L.setHighpass(0, 780.0f, 1.0f);
+    split_low_L.setLowpass(0, 820.0f, 1.2f);
+    split_high_L.setHighpass(0, 780.0f, 1.2f);
     
-    split_low_R.setLowpass(0, 820.0f, 1.0f);
-    split_high_R.setHighpass(0, 780.0f, 1.0f);
+    split_low_R.setLowpass(0, 820.0f, 1.2f);
+    split_high_R.setHighpass(0, 780.0f, 1.2f);
     //
     
     biquad1.setPeaking(0, EQ_PEAK1_FREQ - Freq1 * EQ_PEAK1_FREQ_SCALE, -Gain1 * EQ_PEAK1_GAINSCALE, EQ_PEAK1_Q);
@@ -230,10 +234,6 @@ void setup()
     #endif
     
     sgtl5000_1.adcHighPassFilterDisable();
-    
-    SwitchA.update();
-    SwitchB.update();
-    Toggle.update();
 }
 
 
@@ -263,7 +263,7 @@ void loop() {
             DPRINT(vPotNorm[i]); DPRINT(" - ");
         #endif
     }
-    
+        
     #ifdef DEBUG_POT_VALUES
         int test = digitalRead(PIN_TOGGLE);
         DPRINT(test); DPRINT(" - ");
@@ -285,24 +285,23 @@ void loop() {
     Toggle.update();
     
     
-    
     if (Toggle.risingEdge())
     {
         TremMode = 0;
         TremActive = 0;
         
-        Ramper->Start(0.0f);
+        mixer_trem_loop_L.gain(0, 1.0f);
+        mixer_trem_loop_L.gain(1, 0.0f);
+        
+        mixer_trem_loop_R.gain(0, 1.0f);
+        mixer_trem_loop_R.gain(1, 0.0f);
         
         LED.Flush();
     }
     else if (Toggle.fallingEdge())
     {
-        Ramper->Start(1.0f);
-        
-        TremActive = 1;
         TremMode = 1;
     }
-    
     
     
     if (PedalMode == 1)
@@ -369,134 +368,82 @@ void loop() {
         
         if (!TremMode)
         {
-            Attack = (1 - vPotNorm[POT_ATTACK]);
+            Attack = (1.0f - vPotNorm[POT_ATTACK]);
             if (Attack < 0.05f) { Attack = 0.05f; }
-            Decay = (1 - vPotNorm[POT_DECAY]);
+            Decay = (vPotNorm[POT_DECAY]);
             if (Decay > 0.99f) { Decay = 1.0f; }
             
-            Blend = 1.0f - vPot[POT_MIXER];
+            Blend = 1.0f - vPotNorm[POT_MIXER];
             RecordBlend = vPotNorm[POT_BLEND];
-            
-            if (SwitchB.fallingEdge())
-            {                
-                stutter.setDecay(1.0f);
-                stutter_R.setDecay(1.0f);
-            
-                SwitchBPressed = true;
-                stutter.drop(); stutter_R.drop(); LED.Flush();
-                stutter.snap(); stutter_R.snap(); LED.SetRGB(0.1f, 0.3f, 0.1f);
-                
-                StutterRamper->Set(StutterRamper->Poll());
-                StutterRamper->Start(1.0f, 0.0f, 1);
-                StutterRamper->SetSpeed(1.0f);
-            }
-            else if (SwitchB.risingEdge())
-            {
-                SwitchBPressed = false;
-                StutterRamper->Start(1.0f, 0.0f, 1);
-                StutterRamper->Start(0.0f, 1.0f, -1);
-                StutterRamper->SetSpeed(Decay);
-            }
-            
         }
         else
         {
             Depth = vPotNorm[POT_MIXER];
             Sense = vPotNorm[POT_BLEND];
-            Speed = 1.0f - vPotNorm[POT_ATTACK];
-            SplitFreq = vPotNorm[POT_DECAY];
+            Speed = vPotNorm[POT_ATTACK];
         }
         
-        if (!SwitchBPressed)
+        stutter.setAttack(Attack);
+        stutter.setDecay(Decay);
+            
+        stutter_R.setAttack(Attack);
+        stutter_R.setDecay(Decay);
+                
+        if (SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
         {
-            if (SwitchPressed && ((ms - SwitchTimer) > RETRIGGER_EXIT_TIME))
+            stutter.drop(); stutter_R.drop(); LED.Flush();
+            SwitchPressed = false;
+        }
+            
+        if (stutter.isLatched()) {
+            LED.SetRGB(0.0f, 0.0f, 0.25f);
+        }
+        
+        
+        
+        // Stutter / Looper control
+        if (SwitchA.fallingEdge())
+        {
+            SwitchPressed = true;
+            SwitchTimer = ms;
+            
+            if (!stutter.isActive())
+            {
+                stutter.snap(); stutter_R.snap();
+                LED.SetRGB(0.0f, 0.1f, 0.0f);
+            }
+            else
             {
                 stutter.drop(); stutter_R.drop(); LED.Flush();
-                SwitchPressed = false;
-            }
-            
-            if (stutter.isLatched()) {
-                LED.SetRGB(0.0f, 0.0f, 0.1f);
-            }
-            // Stutter / Looper control
-            if (SwitchA.fallingEdge())
-            {
-                SwitchPressed = true;
-                SwitchTimer = ms;
-                
-                stutter.drop(); stutter_R.drop();
                 stutter.snap(); stutter_R.snap(); LED.SetRGB(0.0f, 0.1f, 0.0f);
-                
-                StutterRamper->Set(StutterRamper->Poll());
-                StutterRamper->Start(1.0f, 0.0f, 1);
-            }
-            else if (SwitchA.risingEdge())
-            {
-                SwitchPressed = false;
-                
-                stutter.latch(); stutter_R.latch(); LED.SetRGB(0.0f, 0.0f, 0.1f);
-                
-            }
-            
-            
-            if (StutterRamper->GetDirection() == 1) {
-                StutterRamper->SetSpeed(Attack * 2.0f + 0.01f);
-            } else {
-                StutterRamper->SetSpeed(Decay);
             }
         }
-        else
+        else if (SwitchA.risingEdge())
         {
-            if ((StutterVol >= 1.0f) && (StutterRamper->GetDirection() == 1) & !stutter.isLatched()) {
-                stutter.latch(); stutter_R.latch(); LED.SetRGB(0.0f, 0.0f, 0.1f);
-            }
+            SwitchPressed = false;
+            
+            stutter.unlatch(); stutter_R.unlatch(); LED.Flush();
         }
         
         
-        // if (stutter.isFinished())   { stutter.resetFinished(); LED.Flush(); }
-        // if (stutter_R.isFinished()) { stutter_R.resetFinished(); LED.Flush(); }
         
-        StutterRamper->Update();
-        
-        
-        
-        StutterVol = StutterRamper->Poll();
-        DPRINT(StutterVol);
-        DPRINT("; ");
-        DPRINTLN(StutterRamper->GetDirection());
-        
-        if (!SwitchBPressed)
-        {
-            if ((StutterVol <= 0.0f) && (StutterRamper->GetDirection() == -1)) {
-                stutter.drop(); stutter_R.drop(); LED.Flush();
-            }
-            if ((StutterVol >= 1.0f) && (StutterRamper->GetDirection() == 1) && stutter.isLatched()) {
-                StutterRamper->Start(0.0f, 1.0f, -1);
-                StutterRamper->SetSpeed(Decay);
-                LED.SetRGB(0.0f, 0.0f, 0.1f);
-            }
+        if (stutter.isFinished()) {
+            stutter.resetFinished();
+            LED.Flush();
         }
+        if (stutter_R.isFinished()) {
+            stutter_R.resetFinished();
+            LED.Flush();
+        }
+        
+        
         
         // Adjust dry/wet blend
         if (ms - last > 20) {
-            IsRamping = Ramper->Update();
-            Value = Ramper->Poll();
-            
-            if (IsRamping)
-            {
-                mixer_trem_loop_L.gain(0, 1.0f - Value);
-                mixer_trem_loop_L.gain(1, Value * 1.25f);
-                
-                mixer_trem_loop_R.gain(0, 1.0f - Value);
-                mixer_trem_loop_R.gain(1, Value * 1.25f);
-            }
-            
-            
-            // Update stutter blend etc.
             stutter.setBlend(RecordBlend); stutter_R.setBlend(RecordBlend);
             
-            mixer_poststutter.gain(0, Blend <= 0 ? 1.0f * StutterVol : StutterVol * (1.0f - (abs(Blend) / 16.0f)));
-            mixer_poststutter_R.gain(0, Blend <= 0 ? 1.0f * StutterVol : StutterVol * (1.0f - (abs(Blend) / 16.0f)));
+            mixer_poststutter.gain(0, Blend <= 0.5f ? 1.0f * stutter.getGain() : stutter.getGain() * (1.0f - abs(Blend) * 2.0f));
+            mixer_poststutter_R.gain(0, Blend <= 0.5f ? 1.0f * stutter.getGain() : stutter.getGain() * (1.0f - abs(Blend) * 2.0f));
             
             if (!stutter.isLatched() || !stutter.isActive())
             {
@@ -506,10 +453,10 @@ void loop() {
             else
             {
                 
-                float gainCalc = (1.0f - StutterVol) + (1.0f - (abs(Blend) / 16.0f));
+                float gainCalc = (1.0f - stutter.getGain()) + (1.0f - abs(Blend) * 2.0f);
                 
-                mixer_poststutter.gain(1, Blend >= 0 ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
-                mixer_poststutter_R.gain(1, Blend >= 0 ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
+                mixer_poststutter.gain(1, Blend >= 0.5f ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
+                mixer_poststutter_R.gain(1, Blend >= 0.5f ? 1.0f : (gainCalc > 1.0f ? 1.0f : gainCalc));
             }
             
             
@@ -519,69 +466,61 @@ void loop() {
     }
     
     
+    // mixer_poststutter.gain(0, 1);
+    // mixer_poststutter_R.gain(0, 1);
     
     
     
     if (TremMode)
     {
-        split_low_L.setLowpass(0, TREM_FREQ_OFFSET + TREM_FREQ_GAIN * SplitFreq + TREM_FREQ_GAP, 1.0f);
-        split_high_L.setHighpass(0, TREM_FREQ_OFFSET + TREM_FREQ_GAIN * SplitFreq - TREM_FREQ_GAP, 1.0f);
-        
-        split_low_R.setLowpass(0, TREM_FREQ_OFFSET + TREM_FREQ_GAIN * SplitFreq + TREM_FREQ_GAP, 1.0f);
-        split_high_R.setHighpass(0, TREM_FREQ_OFFSET + TREM_FREQ_GAIN * SplitFreq - TREM_FREQ_GAP, 1.0f);
-        
-        
         if (RMS_l.available()) {
             lll = RMS_l.read();
             rrr = RMS_r.read();
-            rmsFilt->input(0.9f + ((lll / 18.0f + rrr / 18.0f) * (Sense / 2.0f)));
-            rmsfact = rmsFilt->output() / (0.5f + Speed * 16.0f);
+            rmsFilt->input(0.9f + lll / 18.0f + rrr / 18.0f);
+            rmsfact = rmsFilt->output();
         }
         
         if (SwitchB.risingEdge())
         {
-            if (TremActive) {
+            if (TremActive)
+            {
                 TremActive = 0;
                 
-                Ramper->Start(0.0f);
+                mixer_trem_loop_L.gain(0, 1.0f);
+                mixer_trem_loop_L.gain(1, 0.0f);
+                
+                mixer_trem_loop_R.gain(0, 1.0f);
+                mixer_trem_loop_R.gain(1, 0.0f);
                 
                 LED.Flush();
-            } else {
+            }
+            else
+            {
                 TremActive = 1;
                 
-                Ramper->Start(1.0f);
+                mixer_trem_loop_L.gain(0, 0.0f);
+                mixer_trem_loop_L.gain(1, 1.5f);
+                
+                mixer_trem_loop_R.gain(0, 0.0f);
+                mixer_trem_loop_R.gain(1, 1.5f);
             }
         }
         
         if (TremActive)
         {
-            if (SplitFreq > 0.999f) {
-                PhaseMultiplier = 0.0f;
-            } else {
-                PhaseMultiplier = 1.0f;
-            }
+            combine_L.gain(0, 0.5f * (sin(ms / 45.0f * rmsfact) + 1.0f) / 1.5f + 0.25f);
+            combine_L.gain(1, 0.5f * (sin(ms / 45.0f * rmsfact + PI) + 1.0f) / 1.5f + 0.25f);
             
-            combine_L.gain(0, Depth * (sin(ms / 45.0f * rmsfact) + 1.0f) / (Depth + 0.5f) + (1 - Depth));
-            combine_L.gain(1, Depth * (sin(ms / 45.0f * rmsfact + PI * PhaseMultiplier) + 1.0f) / (Depth + 0.5f) + (1 - Depth));
-            
-            combine_R.gain(0, Depth * (sin(ms / 45.0f * rmsfact) + 1.0f) / (Depth + 0.5f) + (1 - Depth));
-            combine_R.gain(1, Depth * (sin(ms / 45.0f * rmsfact + PI * PhaseMultiplier) + 1.0f) / (Depth + 0.5f) + (1 - Depth));
+            combine_R.gain(0, 0.5f * (sin(ms / 45.0f * rmsfact) + 1.0f) / 1.5f + 0.25f);
+            combine_R.gain(1, 0.5f * (sin(ms / 45.0f * rmsfact + PI) + 1.0f) / 1.5f + 0.25f);
             
             float led_wobble = 0.5f * (sin(ms / 45.0f * rmsfact) + 1.0f) / 1.5f + 0.25f;
-            float led_wobble_pi = 0.5f * (sin(ms / 45.0f * rmsfact + PI * PhaseMultiplier) + 1.0f) / 1.5f + 0.25f;
+            float led_wobble_pi = 0.5f * (sin(ms / 45.0f * rmsfact + PI) + 1.0f) / 1.5f + 0.25f;
             
             if (!IsClipping) { LED.SetRGB(1.0f * led_wobble * (lll + rrr) * 0.5f, 0.2f * led_wobble * lll, 1.4f * led_wobble * rrr); }
         }
-        else
-        {
-            combine_L.gain(0, 1.0f);
-            combine_L.gain(1, 1.0f);
-            
-            combine_R.gain(0, 1.0f);
-            combine_R.gain(1, 1.0f);
-        }
-        
     }
+    
     
     // Monitor input clipping
     if (peak_L.available()) {
