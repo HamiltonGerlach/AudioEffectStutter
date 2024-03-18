@@ -26,7 +26,7 @@ void AudioEffectStutter::update(void)
                 cache = (int16_t *)queue[position]->data;
                 pa = (int16_t *)(block->data);
                 
-                //transmit(queue[position]);
+                transmit(queue[position]);
                 
                 for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
                     sample = *pa;
@@ -61,7 +61,7 @@ void AudioEffectStutter::update(void)
             
             recent = position;
             queue[position] = block;
-            // transmit(block);
+            //transmit(queue[position]);
             
             position = (position < STUTTER_QUEUE_END) ? position + 1 : 0;
             length = (length < STUTTER_QUEUE_END) ? length + 1 : length;
